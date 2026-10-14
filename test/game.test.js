@@ -56,7 +56,7 @@ test('shield absorbs damage and expires; D heals with a cooldown',()=>{
 test('R is delayed, stops walking and deals area damage; F blinks within bridge bounds',()=>{
  const {r,a,b}=duel();command(r,a.id,{type:'move',x:1000,y:380});command(r,a.id,{type:'skill',key:'r',x:900,y:380});advance(r,.3);assert.equal(b.hp,b.maxHp);assert.equal(a.x,700);
  advance(r,.4);assert.equal(b.hp,b.maxHp-260);assert.equal(a.casting,null);
- const before=a.x;command(r,a.id,{type:'skill',key:'f',x:1500,y:380});assert.equal(a.x,before+180);assert.equal(a.order,'idle');assert.equal(a.cd.f,45);
+ const before=a.x;command(r,a.id,{type:'skill',key:'f',x:1500,y:380});assert.equal(a.x,before+240);assert.equal(a.order,'idle');assert.equal(a.cd.f,45);
  a.cd.f=0;command(r,a.id,{type:'skill',key:'f',x:1500,y:0});assert.ok(a.y>=220);
 });
 test('late input sequence cannot override a newer movement command',()=>{

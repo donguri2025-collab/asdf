@@ -1,14 +1,15 @@
+import { FLASH_RANGE, LUX_LASER_HALF_WIDTH } from './public/rules.js';
 import { extraCast, returnSoul } from './extra-champions.js';
 import { championCast, segmentDistance } from './champion-skills.js';
 import { randomUUID } from 'node:crypto';
 export const W = 1600, H = 760;
 export const heroes = {
   ezreal:{name:'이즈리얼',hp:620,range:260,damage:33,speed:225,color:'#72e9ff'},
-  blitzcrank:{name:'블리츠크랭크',hp:940,range:90,damage:44,speed:205,color:'#f8d467'},
-  yone:{name:'요네',hp:760,range:100,damage:46,speed:235,color:'#ff879e'},
+  blitzcrank:{name:'블리츠크랭크',hp:1020,range:100,damage:44,speed:235,color:'#f8d467'},
+  yone:{name:'요네',hp:820,range:110,damage:46,speed:250,color:'#ff879e'},
   ashe: { name:'애쉬',hp:650,range:280,damage:34,speed:215,color:'#75e6ff'},
   lux: { name:'럭스',hp:570,range:235,damage:29,speed:210,color:'#ffe9a0'},
-  garen: { name:'가렌',hp:900,range:95,damage:49,speed:230,color:'#83adff'},
+  garen: { name:'가렌',hp:980,range:105,damage:49,speed:250,color:'#83adff'},
   ranger: { name: '서리 궁수', hp: 650, range: 265, damage: 34, speed: 215, color: '#75e6ff' },
   mage: { name: '별빛 마법사', hp: 570, range: 235, damage: 29, speed: 200, color: '#c8a2ff' },
   knight: { name: '빙하 기사', hp: 900, range: 95, damage: 49, speed: 230, color: '#ffc887' }
@@ -106,7 +107,7 @@ function cast(r,p,key,aim){
  }else if(key==='r'){p.cd.r=30;p.windup=null;p.casting={x:center.x,y:center.y,remaining:.65};
  }else if(key==='d'){p.cd.d=45;p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.3);r.effects.push({type:'heal',x:p.x,y:p.y,team:p.team,life:.6});
  }else if(key==='f'){
-  p.cd.f=45;const old={x:p.x,y:p.y};p.x=clamp(p.x+(aim.x-p.x)/d*Math.min(180,d),65,W-65);p.y=clamp(p.y+(aim.y-p.y)/d*Math.min(180,d),220,540);
+  p.cd.f=45;const old={x:p.x,y:p.y};p.x=clamp(p.x+(aim.x-p.x)/d*Math.min(FLASH_RANGE,d),65,W-65);p.y=clamp(p.y+(aim.y-p.y)/d*Math.min(FLASH_RANGE,d),220,540);
   p.target=null;p.order='idle';p.attackTarget=null;p.windup=null;
   r.effects.push({type:'dash',x:old.x,y:old.y,tx:p.x,ty:p.y,team:p.team,life:.4});
  }
@@ -133,7 +134,7 @@ export function tick(r,dt){
   if(p.stun>0){p.windup=null;p.casting=null;continue;}
   if(p.casting){p.casting.remaining-=dt;if(p.casting.remaining<=0){
    const cast=p.casting;if(cast.type==='laser'){
-    const end={x:cast.tx,y:cast.ty};for(const u of units(r))if(u.team!==p.team&&segmentDistance(u,cast,end)<=40)hit(r,p,u,280);
+    const end={x:cast.tx,y:cast.ty};for(const u of units(r))if(u.team!==p.team&&segmentDistance(u,cast,end)<=LUX_LASER_HALF_WIDTH)hit(r,p,u,280);
     r.effects.push({...cast,type:'laser',team:p.team,life:.6});
    }else if(cast.type==='ezreal-wave'){
     projectile(r,p,cast.angle,{damage:220,radius:44,speed:800,life:2.1,visual:'arcane-wave',pierce:99});

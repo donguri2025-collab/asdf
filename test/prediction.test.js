@@ -34,3 +34,14 @@ test('short champion blinks, hooks and spirit returns snap using position revisi
  p.receive({...h,x:230,positionRevision:1},150);assert.equal(p.local.x,230);assert.deepEqual(p.correction,{x:0,y:0});
  p.receive({...h,positionRevision:2},200);assert.equal(p.local.x,170);
 });
+test('Flash predicts instantly, survives stale snapshots, and confirms or rolls back',()=>{
+ const p=new Prediction(),h={...hero(),lastSeq:0};p.receive(h,100);
+ p.input({type:'skill',key:'f',seq:1,x:1000,y:380},110);assert.equal(p.local.x,410);assert.equal(p.local.cd.f,45);
+ p.receive(h,150);assert.equal(p.local.x,410);assert.equal(p.local.cd.f,45);
+ p.input({type:'skill',key:'f',seq:2,x:1000,y:380},160);assert.equal(p.local.x,410);
+ p.receive({...h,x:410,lastSeq:1,cd:{f:44.9}},180);assert.equal(p.flash,null);assert.equal(p.local.x,410);
+ p.reset();p.receive(h,100);p.input({type:'skill',key:'f',seq:3,x:1000,y:380},110);p.rejectFlash(3);assert.equal(p.local.x,170);assert.equal(p.local.cd.f,0);
+});
+test('Flash prediction respects crowd control, casting and cooldown',()=>{
+ for(const blocked of [{stun:1},{root:1},{silence:1},{casting:{}},{cd:{f:3}}]){const p=new Prediction();p.receive({...hero(),...blocked},100);p.input({type:'skill',key:'f',seq:1,x:1000,y:380},110);assert.equal(p.local.x,170);assert.equal(p.flash,null);}
+});

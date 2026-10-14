@@ -37,10 +37,10 @@ test('Garen Q empowers melee and silences; W shields and reduces incoming damage
 test('Garen spins while moving and R requires a nearby champion and scales with missing health',()=>{
  const {r,a,b}=duel('garen');b.x=760;skill(r,a,'e');command(r,a.id,{type:'move',x:850,y:380});advance(r,.25);assert.ok(a.x>650);assert.ok(b.hp<b.maxHp);assert.ok(a.spin>0);
  b.x=1400;assert.equal(skill(r,a,'r',1400),false);assert.equal(a.cd.r,0);
- b.x=a.x+150;b.hp=400;assert.equal(skill(r,a,'r',b.x),true);assert.equal(b.hp,100);assert.equal(a.cd.r,30);
+ b.x=a.x+150;b.hp=400;assert.equal(skill(r,a,'r',b.x),true);assert.equal(b.hp,400-150-(b.maxHp-400)*.3);assert.equal(a.cd.r,30);
 });
 test('all champions retain D heal and F flash and buffs clear on death',()=>{
- for(const kind of ['ashe','lux','garen']){const {r,a,b}=duel(kind,'lux');a.hp=100;skill(r,a,'d');assert.equal(a.hp,100+a.maxHp*.3);const x=a.x;skill(r,a,'f',1200);assert.equal(a.x,x+180);
+ for(const kind of ['ashe','lux','garen']){const {r,a,b}=duel(kind,'lux');a.hp=100;skill(r,a,'d');assert.equal(a.hp,100+a.maxHp*.3);const x=a.x;skill(r,a,'f',1200);assert.equal(a.x,x+240);
  a.hp=1;a.spin=2;a.rapid=2;b.x=a.x+150;skill(r,b,'e',a.x);skill(r,b,'e',a.x);advance(r,1.2);assert.equal(a.hp,0);assert.equal(a.spin,0);assert.equal(a.rapid,0);}
 });
 test('tower ignores Lux Q/E/R and Garen spin; skill shots pass through to enemies behind it',()=>{

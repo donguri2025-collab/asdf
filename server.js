@@ -32,7 +32,7 @@ const server=http.createServer(async(req,res)=>{
   const data=await body(req),c=clients.get(data.id);if(c){removePlayer(c.room,data.id);c.stream?.end();clients.delete(data.id);}return json(res,200,{ok:true});
  }
  if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
- const paths={'/':'index.html','/app.js':'app.js','/motion.js':'motion.js','/prediction.js':'prediction.js','/champions.js':'champions.js','/style.css':'style.css'};const file=paths[url.pathname];
+ const paths={'/':'index.html','/app.js':'app.js','/motion.js':'motion.js','/prediction.js':'prediction.js','/champions.js':'champions.js','/rules.js':'rules.js','/style.css':'style.css'};const file=paths[url.pathname];
  if(!file)return json(res,404,{error:'Not found'});
  const buffer=await readFile(publicDir+file);res.writeHead(200,{'Cache-Control':'no-cache','Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8'});res.end(buffer);
  }catch{json(res,400,{error:'요청을 처리할 수 없어요.'});}
