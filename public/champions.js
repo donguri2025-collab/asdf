@@ -1,0 +1,40 @@
+export const kits={
+ ashe:{name:'애쉬',tag:'서리 궁수',color:'#8eeaff',q:['궁사의 집중','➶','5초간 평타 공격 속도 증가 · 9초'],w:['일제 사격','⋙','부채꼴 얼음 화살 · 둔화 · 8초'],e:['매 날리기','⌁','5초간 적 위치·사거리 정찰 표시 · 14초'],r:['마법의 수정화살','➳','미니언을 통과하는 대형 화살 · 챔피언 1.5초 기절 · 30초']},
+ lux:{name:'럭스',tag:'광명의 소녀',color:'#ffe6a0',q:['빛의 속박','✧','최대 두 적에게 피해와 1.4초 속박 · 6초'],w:['프리즘 보호막','⬡','자신에게 3초간 보호막 180 · 10초'],e:['광휘의 특이점','✺','빛 구체가 1.1초 후 폭발 · 피해와 둔화 · 8초'],r:['최후의 섬광','☀','0.65초 시전 후 긴 직선 레이저 · 30초']},
+ garen:{name:'가렌',tag:'데마시아의 힘',color:'#a8c9ff',q:['결정타','⚔','이동 속도 증가 · 다음 평타 강화와 침묵 · 7초'],w:['용기','⬡','3초 보호막과 받는 피해 30% 감소 · 10초'],e:['심판','↻','3초간 이동하며 회전 공격 · 10초'],r:['데마시아의 정의','†','근처 적 챔피언에게 잃은 체력 비례 마무리 · 사거리 220 · 30초']}
+};
+// Original vector fan-art: silhouettes stay readable at game scale.
+export function drawChampion(ctx,kind,x,y,scale=1,phase=0){
+ ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.lineJoin='round';ctx.lineCap='round';
+ const path=(points,fill,stroke='#132b42',width=2)=>{ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke();};
+ const line=(points,color,width)=>{ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();};
+ const orb=(x,y,r,color)=>{ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();};
+ if(kind==='ashe'||kind==='ranger'){
+  path([[-13,-10],[-23,25],[0,18],[18,24],[11,-12]],'#174e87','#72c5ef');
+  path([[-9,-7],[9,-7],[12,15],[-11,15]],'#24475c','#e5d09a');
+  line([[-7,15],[-9,25]],'#263546',6);line([[7,15],[10,25]],'#263546',6);
+  path([[-14,-13],[-9,-28],[8,-29],[15,-14],[0,-7]],'#2471a0','#8bdafa');
+  path([[-10,-20],[10,-20],[7,-5],[-6,-5]],'#f2d3bd','#e4ecf2',1);
+  path([[-12,-20],[-6,-23],[-8,-4],[-13,4]],'#e6f6ff','#a9d3e6',1);
+  path([[4,-24],[11,-21],[12,6],[6,-7]],'#e6f6ff','#a9d3e6',1);
+  line([[20,-25],[31,-13],[34,0],[30,14],[20,25]],'#8beaff',4);line([[20,-25],[20,25]],'#e4faff',1);
+  line([[-5,0],[19,2]],'#f3d2b5',5);line([[8,1],[39,1]],'#d5faff',2);path([[42,1],[34,-4],[34,6]],'#a6ecff');
+ }else if(kind==='lux'||kind==='mage'){
+  path([[-11,-8],[-18,22],[1,28],[16,21],[10,-9]],'#dbeaf4','#6996cb');
+  path([[-11,-4],[11,-4],[9,13],[-9,13]],'#7da5d8','#e3c775');
+  path([[-17,-4],[-9,-9],[-5,0],[-15,4]],'#f5e3a7');path([[8,-8],[18,-3],[16,5],[6,0]],'#f5e3a7');
+  line([[-5,21],[-7,27]],'#34496d',5);line([[7,21],[9,27]],'#34496d',5);
+  orb(0,-16,12,'#f1d3b6');path([[-13,-13],[-12,-26],[4,-29],[13,-20],[13,7],[7,-1],[6,-18],[-5,-20]],'#f9d96c','#d2a34d');
+  line([[18,22],[24,-24]],'#ecce77',4);line([[5,3],[21,4]],'#efd2b3',5);
+  path([[24,-40],[31,-28],[24,-16],[17,-28]],'#fff5b0','#d8ba69');orb(24,-28,5,'#fffef1');
+ }else{
+  path([[-14,-10],[-23,25],[20,25],[13,-12]],'#23449a','#5279d4');
+  line([[-9,15],[-11,28]],'#526578',8);line([[9,15],[11,28]],'#526578',8);
+  path([[-15,-9],[15,-9],[12,17],[-12,17]],'#8094a8','#d7bc6c',3);
+  path([[-25,-13],[-12,-15],[-8,0],[-23,4]],'#5171a0','#e0c16b',3);path([[12,-15],[25,-11],[23,5],[8,0]],'#5171a0','#e0c16b',3);
+  orb(0,-21,11,'#dfb99c');path([[-11,-21],[-9,-32],[7,-33],[12,-24],[6,-27],[-6,-25]],'#493d33');
+  ctx.save();ctx.translate(23,5);ctx.rotate(phase);path([[-4,10],[-6,-30],[0,-44],[6,-30],[4,10]],'#dbe9f2','#7b9aa9');line([[-11,9],[11,9]],'#e9ca7c',5);line([[0,12],[0,23]],'#6f5033',5);ctx.restore();
+ }
+ ctx.restore();
+}
+export function portrait(kind){const c=document.createElement('canvas');c.width=100;c.height=100;drawChampion(c.getContext('2d'),kind,47,55,1.35);return c.toDataURL();}

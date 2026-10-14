@@ -1,3 +1,5 @@
+import { kits, drawChampion, portrait } from './champions.js';
+const portraits=Object.fromEntries(['ashe','lux','garen'].map(k=>[k,portrait(k)]));
 import { Prediction } from './prediction.js';
 const prediction = new Prediction();
 let sequence=0,attackMode=false,selectedId=null,lastFrame=0,inputQueue=Promise.resolve();
@@ -7,10 +9,13 @@ const $=s=>document.querySelector(s);
 const canvas=$('#arena');
 let ctx=canvas.getContext('2d');
 let backgroundLayer=null;
-let hero='ranger',session=null,stream=null,state=null,mouse={x:800,y:380},marker=null,lastState=0,connected=false;
+let hero='ashe',session=null,stream=null,state=null,mouse={x:800,y:380},marker=null,lastState=0,connected=false;
 const palette=['#7de2f4','#fa91ab'];
-const icons={ranger:'➶',mage:'✦',knight:'⚔'};
-for(const button of document.querySelectorAll('[data-hero]'))button.onclick=()=>{hero=button.dataset.hero;for(const b of document.querySelectorAll('[data-hero]')){b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',b===button);}};
+const icons={ashe:'➶',lux:'☀',garen:'⚔',ranger:'➶',mage:'✦',knight:'⚔'};
+for(const button of document.querySelectorAll('[data-hero]'))button.onclick=()=>{hero=button.dataset.hero;showKit();for(const b of document.querySelectorAll('[data-hero]')){b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',b===button);}};
+function setPortrait(el,kind){el.textContent='';el.style.backgroundImage=`url(${portraits[kind]})`;el.style.backgroundSize='contain';el.style.backgroundPosition='center';el.style.backgroundRepeat='no-repeat';}
+function showKit(){const kit=kits[hero];$('#kit-preview').textContent=['q','w','e','r'].map(k=>`${k.toUpperCase()} ${kit[k][0]}`).join(' · ');}
+for(const b of document.querySelectorAll('[data-hero]'))setPortrait(b.querySelector('.portrait'),b.dataset.hero);showKit();
 const initialCode=new URLSearchParams(location.search).get('room');if(initialCode)$('#room-code').value=initialCode.slice(0,6);
 async function post(path,data){const res=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw Error(result.error||'연결에 실패했어요.');return result;}
 async function join(code=''){
@@ -62,7 +67,8 @@ for(const name of ['help','settings'])$('#'+name+'-toggle').onclick=()=>{const p
 window.addEventListener('pagehide',()=>{if(session)navigator.sendBeacon('/api/leave',new Blob([JSON.stringify({id:session.id})],{type:'application/json'}));});
 function updateHud(){
  const me=state.players.find(p=>p.id===session?.id);if(!me)return;
- selectedId=me.preferredTarget||me.attackTarget||selectedId;$('#my-name').textContent=me.name;$('#my-team').textContent=me.team?'레드 팀 · 오른쪽 기지':'블루 팀 · 왼쪽 기지';$('#my-icon').className=`portrait ${me.kind}`;$('#my-icon').textContent=icons[me.kind];
+ selectedId=me.preferredTarget||me.attackTarget||selectedId;$('#my-name').textContent=me.name;$('#my-team').textContent=me.team?'레드 팀 · 오른쪽 기지':'블루 팀 · 왼쪽 기지';$('#my-icon').className=`portrait ${me.kind}`;setPortrait($('#my-icon'),me.kind);
+ const kit=kits[me.kind];if(kit)for(const key of ['q','w','e','r']){const el=$('#skill-'+key);el.querySelector('span').textContent=kit[key][1];el.querySelector('small').textContent=kit[key][0];el.title=kit[key][0]+' · '+kit[key][2];}
  $('#health-bar').style.width=`${100*me.hp/me.maxHp}%`;$('#health-label').textContent=`${Math.ceil(me.hp)} / ${me.maxHp} HP${me.shield>0?' + 보호막 '+Math.ceil(me.shield):''}`;
  for(const key of ['q','w','e','r','d','f']){const el=$(`#skill-${key}`);el.classList.toggle('cooldown',me.cd[key]>0);el.querySelector('b').textContent=Math.ceil(me.cd[key]);}
  $('#clock').textContent=`${String(Math.floor(state.time/60)).padStart(2,'0')}:${String(Math.floor(state.time%60)).padStart(2,'0')}`;$('#wave').textContent=`WAVE ${state.wave}`;
@@ -70,7 +76,7 @@ function updateHud(){
  $('#connection').textContent=state.players.some(p=>p.bot)?'봇 연습 대전 · 친구 입장 가능':'2명 연결됨 · 온라인 대전';
  $('#siege-status').hidden=state.time<180;
  $('#skill-r').classList.toggle('casting',!!me.casting);
- $('#notice').textContent=attackMode?'우선 공격할 적 근처를 좌클릭하세요':me.casting?'궁극기 시전 중…':me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
+ $('#notice').textContent=attackMode?'우선 공격할 적 근처를 좌클릭하세요':me.stun>0?'기절!':me.root>0?'속박!':me.silence>0?'침묵 — 스킬 사용 불가':me.casting?'궁극기 시전 중…':me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
  if(state.winner!==null){$('#result').hidden=false;$('#result-title').textContent=state.winner===me.team?'VICTORY':'DEFEAT';$('#result-copy').textContent=state.winner===me.team?'상대 코어를 파괴했습니다. 멋진 한 판이었어요!':'우리 코어가 파괴되었습니다. 다시 도전해 보세요.';}
 }
 function circle(x,y,r,fill,stroke){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.stroke();}}
@@ -116,13 +122,17 @@ function drawUnit(u,now){
  if(u.id===selectedId)circle(u.x,u.y,36,null,'#ffba73');
  if(u.shield>0)circle(u.x,u.y,34,'#8bcaff20','#a5d7ff');
  if(u.windup){circle(u.x,u.y,28+u.windup.remaining*35,null,'#fff2b3');}
- if(u.casting){circle(u.casting.x,u.casting.y,210,'#ffbc7125','#ffd798');text('궁극기',u.casting.x,u.casting.y,16,'#ffe4b3');}
+ if(u.casting?.type==='laser'){line(u.casting.x,u.casting.y,u.casting.tx,u.casting.ty,'#ffe6a040',80);line(u.casting.x,u.casting.y,u.casting.tx,u.casting.ty,'#ffe6a0',2);}
+ else if(u.casting){circle(u.casting.x,u.casting.y,210,'#ffbc7125','#ffd798');text('궁극기',u.casting.x,u.casting.y,16,'#ffe4b3');}
 circle(u.x,u.y+13,u.type==='hero'?22:12,'#05121b65');
  if(u.type==='minion'){circle(u.x,u.y,12,u.team?'#674956':'#3b6676',color);ctx.fillStyle=color;ctx.fillRect(u.x-5,u.y-6,10,7);line(u.x+(u.team?-15:15),u.y-10,u.x+(u.team?-15:15),u.y+13,'#afc2c8',2);health(u,27,u.y-23);return;}
  const mine=u.id===session?.id;
  if(mine){if($('#range-toggle').checked||attackMode){ctx.setLineDash([5,8]);circle(u.x,u.y,u.range,null,attackMode?'#ffcc7780':'#b8effb30');ctx.setLineDash([]);}circle(u.x,u.y,30,null,'#ddfcff');diamond(u.x,u.y-70,5,5,'#efffff','#efffff');}
- circle(u.x,u.y,24,u.kind==='mage'?'#40314f':u.kind==='knight'?'#554332':'#294d5b',color);ctx.save();ctx.shadowColor=color;ctx.shadowBlur=15;text(icons[u.kind],u.x,u.y+10,30,u.kind==='mage'?'#ddc2ff':u.kind==='knight'?'#ffe0ab':'#b6efff');ctx.restore();
- health(u,55,u.y-39);text(mine?'나':u.bot?'연습 봇':'상대 플레이어',u.x,u.y-49,11,mine?'#e7ffff':'#b7cbd8',600);
+ if(u.spin>0){circle(u.x,u.y,130,'#93beff12','#e1c47e70');ctx.save();ctx.translate(u.x,u.y);ctx.rotate(now/90);line(-95,0,95,0,'#ffe4a180',5);ctx.restore();}
+ if(u.stun>0||u.root>0){circle(u.x,u.y,28,null,u.stun>0?'#b8eaff':'#ffe8aa');text(u.stun>0?'기절':'속박',u.x,u.y-72,12,'#fff0b5');}
+ drawChampion(ctx,u.kind,u.x,u.y,.85,u.spin>0?now/70:0);
+
+ health(u,55,u.y-39);text(`${u.name}${mine?' · 나':u.bot?' · 봇':''}`,u.x,u.y-49,11,mine?'#e7ffff':'#b7cbd8',600);
  if(mine&&u.target){line(u.x,u.y,u.target.x,u.target.y,'#98e9ed20');}
 }
 function draw(now){
@@ -131,8 +141,10 @@ function draw(now){
  const predicted=prediction.step(dt,state,now);
  for(const s of state.structures){drawStructure(s,now);if(s.id===selectedId&&s.hp>0)circle(s.x,s.y,70,null,'#ffba73');}
  for(const u of [...state.minions,...state.players].map(u=>u.id===session.id&&predicted?predicted:motion.entity(u,now)).sort((a,b)=>a.y-b.y))drawUnit(u,now);
- for(const raw of state.projectiles){const p=motion.entity(raw,now);ctx.save();ctx.shadowColor=palette[p.team];ctx.shadowBlur=18;if(p.type==='skill'){circle(p.x,p.y,p.radius,palette[p.team]+'50',palette[p.team]);circle(p.x,p.y,5,'#efffff');}else circle(p.x,p.y,5,palette[p.team]);ctx.restore();}
- for(const e of state.effects){ctx.save();ctx.globalAlpha=Math.min(1,e.life*3);if(e.type==='hit')text(e.text,e.x,e.y-35-(.25-e.life)*80,17,'#ffe6bb',800);if(e.type==='burst'){circle(e.x,e.y,e.radius,'#c3a9ff20',palette[e.team]);circle(e.x,e.y,e.radius*(1-e.life/.7),null,'#dcbdff');}if(e.type==='heal'){circle(e.x,e.y,50,'#9cffbb22','#9cffbb');text('+',e.x,e.y-30,25,'#9cffbb');}if(e.type==='dash')line(e.x,e.y,e.tx,e.ty,palette[e.team],8);ctx.restore();}
+ for(const zone of state.zones||[]){circle(zone.x,zone.y,zone.radius,'#ffeaa526','#ffe49a');circle(zone.x,zone.y,20+Math.sin(now/90)*5,'#fff2b0');}
+ const me=state.players.find(p=>p.id===session.id);if(me?.scout>0)for(const u of [...state.players,...state.minions].filter(u=>u.team!==me.team&&u.hp>0)){circle(u.x,u.y,u.range,null,'#a1ebff55');diamond(u.x,u.y-80,7,10,'#d1f5ff','#4ac5fa');}
+ for(const raw of state.projectiles){const p=motion.entity(raw,now);ctx.save();ctx.shadowColor=palette[p.team];ctx.shadowBlur=18;if(p.visual==='ice-arrow'||p.visual==='ice'){const angle=p.vx?Math.atan2(p.vy,p.vx):p.team?Math.PI:0;ctx.translate(p.x,p.y);ctx.rotate(angle);const size=p.visual==='ice-arrow'?40:17;line(-size,0,size,0,'#b9f5ff',p.visual==='ice-arrow'?7:3);line(size-12,-12,size,0,'#e6fdff',3);line(size-12,12,size,0,'#e6fdff',3);}else if(p.type==='skill'){const tint=p.visual==='light'?'#ffe6a0':palette[p.team];circle(p.x,p.y,p.radius,tint+'50',tint);circle(p.x,p.y,5,'#efffff');}else circle(p.x,p.y,5,palette[p.team]);ctx.restore();}
+ for(const e of state.effects){ctx.save();ctx.globalAlpha=Math.min(1,e.life*3);if(e.type==='laser'){line(e.x,e.y,e.tx,e.ty,'#ffe18a70',80);line(e.x,e.y,e.tx,e.ty,'#fff5c6',30);line(e.x,e.y,e.tx,e.ty,'#ffffff',8);}if(e.type==='execute'){line(e.x,e.y-180,e.x,e.y,'#ffd87c',14);diamond(e.x,e.y-10,28,42,'#fff1af','#ffffff');}if(e.type==='hawk'){line(e.x,e.y,e.tx,e.ty,'#a8edff80',3);text('⌁',e.x+(e.tx-e.x)*(1-e.life),e.y+(e.ty-e.y)*(1-e.life)-25,45,'#c7f5ff');}if(e.type==='shield')circle(e.x,e.y,48,null,'#fff0a9');if(e.type==='hit')text(e.text,e.x,e.y-35-(.25-e.life)*80,17,'#ffe6bb',800);if(e.type==='burst'){circle(e.x,e.y,e.radius,'#c3a9ff20',palette[e.team]);circle(e.x,e.y,e.radius*(1-e.life/.7),null,'#dcbdff');}if(e.type==='heal'){circle(e.x,e.y,50,'#9cffbb22','#9cffbb');text('+',e.x,e.y-30,25,'#9cffbb');}if(e.type==='dash')line(e.x,e.y,e.tx,e.ty,palette[e.team],8);ctx.restore();}
  if(marker&&now-marker.time<700){const t=(now-marker.time)/700;ctx.save();ctx.globalAlpha=1-t;circle(marker.x,Math.max(220,Math.min(540,marker.y)),10+t*18,null,'#b9fff4');ctx.restore();}
  if(now-lastState>4000){connected=false;text('연결이 지연되고 있어요. 잠시 기다려 주세요.',800,680,17,'#ffc89d');}
 }

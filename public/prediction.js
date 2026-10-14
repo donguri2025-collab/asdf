@@ -20,7 +20,7 @@ export class Prediction {
   this.local={...p,cd:{...p.cd},x:discontinuity?p.x:old.x,y:discontinuity?p.y:old.y};
   if(this.pending&&p.hp>0)this.apply(this.pending);
   let expected={x:p.x,y:p.y};
-  if(p.order==='move'&&p.target&&!p.casting){
+  if(p.order==='move'&&p.target&&!p.casting&&!(p.root>0)&&!(p.stun>0)){
    const dx=p.target.x-p.x,dy=p.target.y-p.y,d=Math.hypot(dx,dy);
    if(d>4){const step=Math.min(d,p.speed*this.latency/1000);expected.x+=dx/d*step;expected.y+=dy/d*step;}
   }
@@ -34,10 +34,10 @@ export class Prediction {
   const d=u=>Math.hypot(p.x-u.x,p.y-u.y);
   const enemy=p.order==='attack'?targets.find(u=>u.id===p.attackTarget):null;
   const target=p.order==='attack'?enemy:p.target;
-  if(!p.casting&&(!p.windup||p.order==='move')&&!(enemy&&d(enemy)<=p.range)&&target){const distance=d(target);if(distance>4){const step=Math.min(distance,p.speed*dt);p.x+=(target.x-p.x)/distance*step;p.y+=(target.y-p.y)/distance*step;}}
+  if(!p.casting&&!(p.root>0)&&!(p.stun>0)&&(!p.windup||p.order==='move')&&!(enemy&&d(enemy)<=(p.spin>0?65:p.range))&&target){const distance=d(target);if(distance>4){const step=Math.min(distance,p.speed*dt);p.x+=(target.x-p.x)/distance*step;p.y+=(target.y-p.y)/distance*step;}}
   // A delayed snapshot must not drag a moving player backwards or sideways.
   // Keep the latest local walking path; reconcile to the final authoritative stop.
-  if(p.order==='move'&&p.target&&!p.casting){
+  if(p.order==='move'&&p.target&&!p.casting&&!(p.root>0)&&!(p.stun>0)){
    const dx=p.target.x-p.x,dy=p.target.y-p.y,distance=Math.hypot(dx,dy);
    if(distance>4){const forward=Math.max(0,(this.correction.x*dx+this.correction.y*dy)/distance);this.correction={x:dx/distance*forward,y:dy/distance*forward};}
    else {p.x=p.target.x;p.y=p.target.y;this.correction={x:0,y:0};}
