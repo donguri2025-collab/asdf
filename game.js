@@ -1,7 +1,11 @@
+import { extraCast, returnSoul } from './extra-champions.js';
 import { championCast, segmentDistance } from './champion-skills.js';
 import { randomUUID } from 'node:crypto';
 export const W = 1600, H = 760;
 export const heroes = {
+  ezreal:{name:'이즈리얼',hp:620,range:260,damage:33,speed:225,color:'#72e9ff'},
+  blitzcrank:{name:'블리츠크랭크',hp:940,range:90,damage:44,speed:205,color:'#f8d467'},
+  yone:{name:'요네',hp:760,range:100,damage:46,speed:235,color:'#ff879e'},
   ashe: { name:'애쉬',hp:650,range:280,damage:34,speed:215,color:'#75e6ff'},
   lux: { name:'럭스',hp:570,range:235,damage:29,speed:210,color:'#ffe9a0'},
   garen: { name:'가렌',hp:900,range:95,damage:49,speed:230,color:'#83adff'},
@@ -13,7 +17,7 @@ const dist = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (n,a,b) => Math.max(a,Math.min(b,n));
 function player(team, kind='ashe', bot=false) {
  const c=heroes[kind] || heroes.ashe;
- return {id:randomUUID(),type:'hero',team,kind:heroes[kind]?kind:'ashe',name:c.name,bot,x:team?1430:170,y:380,hp:c.hp,maxHp:c.hp,range:c.range,damage:c.damage,speed:c.speed,baseSpeed:c.speed,root:0,stun:0,slow:0,silence:0,rapid:0,scout:0,haste:0,guard:0,spin:0,empowered:0,target:null,order:'idle',attackTarget:null,preferredTarget:null,windup:null,casting:null,shield:0,shieldTime:0,lastSeq:0,attack:0,cd:{q:0,w:0,e:0,r:0,d:0,f:0},dead:0,kills:0,deaths:0};
+ return {id:randomUUID(),type:'hero',team,kind:heroes[kind]?kind:'ashe',name:c.name,bot,x:team?1430:170,y:380,hp:c.hp,maxHp:c.hp,range:c.range,damage:c.damage,speed:c.speed,baseSpeed:c.speed,positionRevision:0,qStacks:0,qStackTime:0,spirit:null,powerFist:0,overdrive:0,root:0,stun:0,slow:0,silence:0,rapid:0,scout:0,haste:0,guard:0,spin:0,empowered:0,target:null,order:'idle',attackTarget:null,preferredTarget:null,windup:null,casting:null,shield:0,shieldTime:0,lastSeq:0,attack:0,cd:{q:0,w:0,e:0,r:0,d:0,f:0},dead:0,kills:0,deaths:0};
 }
 export function createRoom(code) {
  return {code,time:0,wave:0,nextWave:2,players:[],minions:[],projectiles:[],effects:[],zones:[],structures:[0,1].flatMap(team=>[
@@ -25,7 +29,7 @@ export function addPlayer(room,kind) {
  const bot=room.players.find(p=>p.bot);
  const p=player(bot?bot.team:0,kind);
  if(bot) room.players.splice(room.players.indexOf(bot),1,p);
- else {room.players.push(p); room.players.push(player(1,['ashe','lux','garen'].find(k=>k!==p.kind)||'lux',true));}
+ else {room.players.push(p); room.players.push(player(1,['ashe','lux','garen','ezreal','blitzcrank','yone'].find(k=>k!==p.kind)||'lux',true));}
  return p;
 }
 export function removePlayer(room,id) {
@@ -34,18 +38,23 @@ export function removePlayer(room,id) {
 }
 function units(r) {return [...r.players,...r.minions,...r.structures].filter(u=>u.hp>0);}
 function hit(r,source,target,damage,kind='skill') {
+ if(target.hp<=0)return;
  if(target.type==='tower'&&kind==='skill')return;
  if(target.type==='core' && r.structures.some(s=>s.team===target.team&&s.type==='tower'&&s.hp>0))return;
+ if(target.arcaneMark?.owner===source.id&&damage>0){damage+=100;target.arcaneMark=null;}
  if(r.time>=180&&(target.type==='tower'||target.type==='core'))damage*=2;
  if(target.guard>0)damage*=.7;
  if(target.shield>0){const absorbed=Math.min(target.shield,damage);target.shield-=absorbed;damage-=absorbed;}
+ const previousHp=target.hp;
  target.hp=Math.max(0,target.hp-damage);
+ if(source.spirit&&target.type==='hero'&&kind!=='echo')source.spirit.damage[target.id]=(source.spirit.damage[target.id]||0)+(previousHp-target.hp);
  r.effects.push({type:'hit',x:target.x,y:target.y,life:.25,team:source.team,text:Math.round(damage)});
  if(target.hp===0){
-  if(target.type==='hero'){target.dead=7;target.deaths++;target.target=null;target.order='idle';target.windup=null;target.casting=null;target.shield=0;for(const k of ['root','stun','slow','silence','rapid','scout','haste','guard','spin','empowered'])target[k]=0;if(source.type==='hero')source.kills++;}
+  if(target.type==='hero'){target.dead=7;target.deaths++;target.target=null;target.order='idle';target.windup=null;target.casting=null;target.shield=0;target.spirit=null;target.qStacks=0;target.qStackTime=0;target.arcaneMark=null;target.powerFist=0;target.overdrive=0;for(const k of ['root','stun','slow','silence','rapid','scout','haste','guard','spin','empowered'])target[k]=0;if(source.type==='hero')source.kills++;}
   if(target.type==='core')r.winner=source.team;
  }
 }
+function relocate(u,x,y){u.x=clamp(x,65,W-65);u.y=clamp(y,220,540);u.positionRevision=(u.positionRevision||0)+1;}
 function move(u,target,dt){if(u.root>0||u.stun>0)return;const d=dist(u,target);if(d<=4){u.x=target.x;u.y=target.y;}if(d>4){const s=Math.min(d,u.speed*dt);u.x=clamp(u.x+(target.x-u.x)/d*s,65,W-65);u.y=clamp(u.y+(target.y-u.y)/d*s,220,540);}}
 function shot(r,p,target,damage,speed=680){r.projectiles.push({id:randomUUID(),x:p.x,y:p.y,team:p.team,owner:p.id,target:target.id,damage,speed,life:2,type:'attack',visual:p.kind==='ashe'?'ice':p.kind==='lux'?'light':null,slow:p.kind==='ashe'?1.5:0});}
 export function command(r,id,input){
@@ -66,6 +75,7 @@ export function command(r,id,input){
   p.target={x:clamp(aim.x,65,W-65),y:clamp(aim.y,220,540)};p.windup=null;return true;
  }
  if(p.stun>0||p.silence>0||input.key==='f'&&p.root>0)return false;
+ if(input.type==='skill'&&input.key==='e'&&p.kind==='yone'&&p.spirit&&!p.casting){p.spirit.fromX=p.x;p.spirit.fromY=p.y;return returnSoul(r,p,{relocate,hit});}
  if(input.type==='skill'&&input.key==='e'&&p.kind==='lux'&&!p.casting){const zone=r.zones.find(z=>z.owner===p.id);if(zone){detonateZone(r,zone);return true;}}
  if(input.type!=='skill'||!['q','w','e','r','d','f'].includes(input.key)||p.cd[input.key]>0||p.casting)return false;
  return cast(r,p,input.key,aim)!==false;
@@ -85,6 +95,7 @@ function detonateZone(r,zone){
 function projectile(r,p,angle,options){const speed=options.speed;r.projectiles.push({id:randomUUID(),x:p.x,y:p.y,team:p.team,owner:p.id,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,type:'skill',hitIds:[],...options});}
 function applyStatus(target,b){if(!['hero','minion'].includes(target.type))return;for(const key of ['root','stun','slow'])if(b[key])target[key]=Math.max(target[key]||0,b[key]);}
 function cast(r,p,key,aim){
+ const extra=extraCast(r,p,key,aim,{distance:dist,hit,projectile,units,relocate,segmentDistance});if(extra!==null)return extra;
  const handled=championCast(r,p,key,aim,{distance:dist,hit,area,projectile,units});if(handled!==null)return handled;
  const d=dist(p,aim)||1;
  const center={x:clamp(p.x+(aim.x-p.x)*Math.min(1,350/d),65,W-65),y:clamp(p.y+(aim.y-p.y)*Math.min(1,350/d),220,540)};
@@ -107,7 +118,10 @@ export function tick(r,dt){
  if(r.nextWave<=0){r.wave++;r.nextWave=13;for(let team=0;team<2;team++)for(let i=0;i<3;i++)r.minions.push({id:randomUUID(),type:'minion',team,x:team?1390+i*26:210-i*26,y:330+i*50,hp:190,maxHp:190,speed:70,damage:15,range:115,attack:0});}
  for(const e of r.effects)e.life-=dt;r.effects=r.effects.filter(e=>e.life>0);
  for(const u of [...r.players,...r.minions]){
-  for(const key of ['root','stun','slow','silence','rapid','scout','haste','guard','spin','empowered'])u[key]=Math.max(0,(u[key]||0)-dt);
+  if(u.arcaneMark){u.arcaneMark.remaining-=dt;if(u.arcaneMark.remaining<=0)u.arcaneMark=null;}
+  if(u.overdrive>0&&u.overdrive<=dt)u.slow=Math.max(u.slow||0,1.5);
+  if(u.qStackTime>0){u.qStackTime=Math.max(0,u.qStackTime-dt);if(!u.qStackTime)u.qStacks=0;}
+  for(const key of ['root','stun','slow','silence','rapid','scout','haste','guard','spin','empowered','powerFist','overdrive'])u[key]=Math.max(0,(u[key]||0)-dt);
   u.speed=(u.baseSpeed||heroes[u.kind]?.speed||70)*(u.haste>0?1.35:1)*(u.slow>0?.65:1);
  }
  for(const zone of [...r.zones]){zone.life-=dt;if(zone.life<=0)detonateZone(r,zone);}
@@ -115,11 +129,19 @@ export function tick(r,dt){
   for(const k of Object.keys(p.cd))p.cd[k]=Math.max(0,p.cd[k]-dt);
   if(p.hp<=0){p.dead-=dt;if(p.dead<=0){p.hp=p.maxHp;p.x=p.team?1430:170;p.y=380;}continue;}
   p.attack=Math.max(0,p.attack-dt);p.shieldTime=Math.max(0,p.shieldTime-dt);if(!p.shieldTime)p.shield=0;
+  if(p.spirit){p.spirit.remaining-=dt;if(p.spirit.remaining<=0){p.spirit.fromX=p.x;p.spirit.fromY=p.y;returnSoul(r,p,{relocate,hit});}}
   if(p.stun>0){p.windup=null;p.casting=null;continue;}
   if(p.casting){p.casting.remaining-=dt;if(p.casting.remaining<=0){
    const cast=p.casting;if(cast.type==='laser'){
     const end={x:cast.tx,y:cast.ty};for(const u of units(r))if(u.team!==p.team&&segmentDistance(u,cast,end)<=40)hit(r,p,u,280);
     r.effects.push({...cast,type:'laser',team:p.team,life:.6});
+   }else if(cast.type==='ezreal-wave'){
+    projectile(r,p,cast.angle,{damage:220,radius:44,speed:800,life:2.1,visual:'arcane-wave',pierce:99});
+   }else if(cast.type==='yone-strike'){
+    const end={x:cast.tx,y:cast.ty};const targets=units(r).filter(u=>u.team!==p.team&&['hero','minion'].includes(u.type)&&segmentDistance(u,cast,end)<65);
+    relocate(p,end.x,end.y);p.target=null;p.order='idle';
+    for(const u of targets){hit(r,p,u,210);if(u.hp>0){relocate(u,end.x+(p.team?-35:35),end.y);u.stun=1;u.windup=null;}}
+    r.effects.push({...cast,type:'wind-dash',team:p.team,life:.6});
    }else area(r,p,cast,210,260);p.casting=null;
   }continue;}
   if(p.spin>0){p.spinTick-=dt;if(p.spinTick<=0){for(const u of units(r))if(u.team!==p.team&&dist(p,u)<130)hit(r,p,u,45);p.spinTick=.5;}}
@@ -145,7 +167,7 @@ export function tick(r,dt){
    if(!enemy||enemy.id!==p.windup.id||dist(p,enemy)>p.range+25)p.windup=null;
    else if(p.windup.remaining<=0){
     p.windup=null;p.attack=p.rapid>0?.18:.5;
-    if(p.kind==='knight'||p.kind==='garen'){hit(r,p,enemy,p.damage+(p.empowered>0&&enemy.type!=='tower'?75:0),'attack');if(p.empowered>0){if(enemy.type==='hero')enemy.silence=1.2;p.empowered=0;}r.effects.push({type:'dash',x:p.x,y:p.y,tx:enemy.x,ty:enemy.y,team:p.team,life:.15});}
+    if(['knight','garen','blitzcrank','yone'].includes(p.kind)){hit(r,p,enemy,p.damage+(p.empowered>0&&enemy.type!=='tower'?75:0)+(p.powerFist>0&&enemy.type!=='tower'?60:0),'attack');if(p.powerFist>0){if(['hero','minion'].includes(enemy.type)&&enemy.hp>0)enemy.stun=1;p.powerFist=0;}if(p.empowered>0){if(enemy.type==='hero')enemy.silence=1.2;p.empowered=0;}r.effects.push({type:'dash',x:p.x,y:p.y,tx:enemy.x,ty:enemy.y,team:p.team,life:.15});}
     else shot(r,p,enemy,p.damage);
    }
    if(p.order==='move'&&p.target)move(p,p.target,dt);
@@ -172,10 +194,15 @@ export function tick(r,dt){
    const d=dist(b,t);if(d<b.speed*dt+8){hit(r,owner,t,b.damage,'attack');applyStatus(t,b);b.life=0;}else{b.x+=(t.x-b.x)/d*b.speed*dt;b.y+=(t.y-b.y)/d*b.speed*dt;}
   }else{
    const previous={x:b.x,y:b.y};b.x+=b.vx*dt;b.y+=b.vy*dt;
-   const candidates=all.filter(u=>u.type!=='tower'&&u.team!==b.team&&u.hp>0&&(!b.heroesOnly||u.type==='hero')&&!(b.hitIds||[]).includes(u.id)&&segmentDistance(u,previous,b)<(u.type==='minion'?14:u.type==='hero'?23:37)+b.radius).sort((a,c)=>dist(a,previous)-dist(c,previous));
+   const candidates=all.filter(u=>u.type!=='tower'&&u.team!==b.team&&u.hp>0&&(!b.heroesOnly||u.type==='hero')&&(!b.unitsOnly||['hero','minion'].includes(u.type))&&!(b.hitIds||[]).includes(u.id)&&segmentDistance(u,previous,b)<(u.type==='minion'?14:u.type==='hero'?23:37)+b.radius).sort((a,c)=>dist(a,previous)-dist(c,previous));
    for(const t of candidates){
     b.hitIds??=[];b.hitIds.push(t.id);
-    if(!b.groupHits?.includes(t.id)){hit(r,owner,t,b.damage);applyStatus(t,b);b.groupHits?.push(t.id);}
+    if(!b.groupHits?.includes(t.id)){
+     if(b.mark)t.arcaneMark={owner:owner.id,remaining:4};else hit(r,owner,t,b.damage);
+     applyStatus(t,b);b.groupHits?.push(t.id);
+     if(b.reduceCooldown&&owner.cd)for(const key of ['q','w','e','r'])owner.cd[key]=Math.max(0,owner.cd[key]-1.5);
+     if(b.pull&&owner.hp>0&&t.hp>0){const d=dist(owner,t)||1;const old={x:t.x,y:t.y};relocate(t,owner.x+(t.x-owner.x)/d*65,owner.y+(t.y-owner.y)/d*65);t.stun=Math.max(t.stun||0,.65);t.windup=null;r.effects.push({type:'hook-pull',x:owner.x,y:owner.y,tx:old.x,ty:old.y,team:owner.team,life:.4});}
+    }
     if(b.hitIds.length>=(b.pierce||1)){b.life=0;break;}
    }
   }

@@ -27,3 +27,6 @@ test('minions and projectiles are interpolated too',()=>{
  m.push(packet(0,0),0);m.push(packet(10,1/15),67);
  for(const id of ['minion','shot'])assert.ok(Math.abs(m.sample(id,67+1000/30).x-5)<1e-8);
 });
+test('remote short displacement is not interpolated as ordinary walking',()=>{
+ const m=new Motion();m.push(state(100,0,{positionRevision:0}),0);m.push(state(160,1/15,{positionRevision:1}),67);assert.equal(m.sample('hero',67).x,160);
+});

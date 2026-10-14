@@ -14,7 +14,7 @@ export class Prediction {
  receive(p,now){
   if(!p)return;
   const old=this.local;
-  const discontinuity=!old||old.hp<=0||p.hp<=0||p.cd.f>old.cd.f+1||Math.hypot(old.x-p.x,old.y-p.y)>250||now-this.last>500;
+  const discontinuity=!old||p.positionRevision!==old.positionRevision||old.hp<=0||p.hp<=0||p.cd.f>old.cd.f+1||Math.hypot(old.x-p.x,old.y-p.y)>250||now-this.last>500;
   this.last=now;
   if(this.pending&&(p.lastSeq>=this.pending.seq||now-this.pending.at>1500))this.pending=null;
   this.local={...p,cd:{...p.cd},x:discontinuity?p.x:old.x,y:discontinuity?p.y:old.y};

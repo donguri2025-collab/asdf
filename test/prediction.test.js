@@ -29,3 +29,8 @@ test('delayed authoritative snapshots cannot drag walking backwards or stop pred
  assert.ok(p.local.x>300);
  const target={...p.local.target};p.input({type:'attackMove',x:400,y:220,seq:2},650);assert.deepEqual(p.local.target,target);
 });
+test('short champion blinks, hooks and spirit returns snap using position revision',()=>{
+ const p=new Prediction(),h={...hero(),positionRevision:0};p.receive(h,100);
+ p.receive({...h,x:230,positionRevision:1},150);assert.equal(p.local.x,230);assert.deepEqual(p.correction,{x:0,y:0});
+ p.receive({...h,positionRevision:2},200);assert.equal(p.local.x,170);
+});

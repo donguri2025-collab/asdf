@@ -1,5 +1,5 @@
 import { kits, drawChampion, portrait } from './champions.js';
-const portraits=Object.fromEntries(['ashe','lux','garen'].map(k=>[k,portrait(k)]));
+const portraits=Object.fromEntries(Object.keys(kits).map(k=>[k,portrait(k)]));
 import { Prediction } from './prediction.js';
 const prediction = new Prediction();
 let sequence=0,attackMode=false,selectedId=null,lastFrame=0,inputQueue=Promise.resolve();
@@ -71,9 +71,10 @@ function updateHud(){
  const kit=kits[me.kind];if(kit)for(const key of ['q','w','e','r']){const el=$('#skill-'+key);el.querySelector('span').textContent=kit[key][1];el.querySelector('small').textContent=kit[key][0];el.title=kit[key][0]+' · '+kit[key][2];}
  $('#health-bar').style.width=`${100*me.hp/me.maxHp}%`;$('#health-label').textContent=`${Math.ceil(me.hp)} / ${me.maxHp} HP${me.shield>0?' + 보호막 '+Math.ceil(me.shield):''}`;
  for(const key of ['q','w','e','r','d','f']){const el=$(`#skill-${key}`);el.classList.toggle('cooldown',me.cd[key]>0);el.querySelector('b').textContent=Math.ceil(me.cd[key]);}
- const recastE=me.kind==='lux'&&(state.zones||[]).some(z=>z.owner===me.id);
+ const recastE=me.kind==='lux'&&(state.zones||[]).some(z=>z.owner===me.id)||me.kind==='yone'&&!!me.spirit;
  $('#skill-e').classList.toggle('recast',recastE);
- if(recastE){$('#skill-e').classList.remove('cooldown');$('#skill-e small').textContent='E 다시: 폭발';$('#skill-e').title='E를 다시 누르면 즉시 폭발합니다';}
+ if(recastE){$('#skill-e').classList.remove('cooldown');$('#skill-e small').textContent=me.kind==='yone'?'E 다시: 복귀':'E 다시: 폭발';$('#skill-e').title=me.kind==='yone'?'E를 다시 누르면 본체로 복귀합니다':'E를 다시 누르면 즉시 폭발합니다';}
+ if(me.kind==='yone'&&me.qStacks>=2){$('#skill-q small').textContent='Q 돌진 준비';$('#skill-q').classList.add('primed');}else $('#skill-q').classList.remove('primed');
  $('#clock').textContent=`${String(Math.floor(state.time/60)).padStart(2,'0')}:${String(Math.floor(state.time%60)).padStart(2,'0')}`;$('#wave').textContent=`WAVE ${state.wave}`;
  $('#score-blue').textContent=state.players.filter(p=>p.team===0).reduce((n,p)=>n+p.kills,0);$('#score-red').textContent=state.players.filter(p=>p.team===1).reduce((n,p)=>n+p.kills,0);
  $('#connection').textContent=state.players.some(p=>p.bot)?'봇 연습 대전 · 친구 입장 가능':'2명 연결됨 · 온라인 대전';
@@ -125,7 +126,8 @@ function drawUnit(u,now){
  if(u.id===selectedId)circle(u.x,u.y,36,null,'#ffba73');
  if(u.shield>0)circle(u.x,u.y,34,'#8bcaff20','#a5d7ff');
  if(u.windup){circle(u.x,u.y,28+u.windup.remaining*35,null,'#fff2b3');}
- if(u.casting?.type==='laser'){line(u.casting.x,u.casting.y,u.casting.tx,u.casting.ty,'#ffe6a040',80);line(u.casting.x,u.casting.y,u.casting.tx,u.casting.ty,'#ffe6a0',2);}
+ if(u.casting?.type==='ezreal-wave'){circle(u.x,u.y,35,null,'#7cddff');}
+ else if(u.casting?.type==='laser'||u.casting?.type==='yone-strike'){line(u.casting.x,u.casting.y,u.casting.tx,u.casting.ty,'#ffe6a040',80);line(u.casting.x,u.casting.y,u.casting.tx,u.casting.ty,'#ffe6a0',2);}
  else if(u.casting){circle(u.casting.x,u.casting.y,210,'#ffbc7125','#ffd798');text('궁극기',u.casting.x,u.casting.y,16,'#ffe4b3');}
 circle(u.x,u.y+13,u.type==='hero'?22:12,'#05121b65');
  if(u.type==='minion'){circle(u.x,u.y,12,u.team?'#674956':'#3b6676',color);ctx.fillStyle=color;ctx.fillRect(u.x-5,u.y-6,10,7);line(u.x+(u.team?-15:15),u.y-10,u.x+(u.team?-15:15),u.y+13,'#afc2c8',2);health(u,27,u.y-23);return;}
@@ -133,6 +135,9 @@ circle(u.x,u.y+13,u.type==='hero'?22:12,'#05121b65');
  if(mine){if($('#range-toggle').checked||attackMode){ctx.setLineDash([5,8]);circle(u.x,u.y,u.range,null,attackMode?'#ffcc7780':'#b8effb30');ctx.setLineDash([]);}circle(u.x,u.y,30,null,'#ddfcff');diamond(u.x,u.y-70,5,5,'#efffff','#efffff');}
  if(u.spin>0){circle(u.x,u.y,130,'#93beff12','#e1c47e70');ctx.save();ctx.translate(u.x,u.y);ctx.rotate(now/90);line(-95,0,95,0,'#ffe4a180',5);ctx.restore();}
  if(u.stun>0||u.root>0){circle(u.x,u.y,28,null,u.stun>0?'#b8eaff':'#ffe8aa');text(u.stun>0?'기절':'속박',u.x,u.y-72,12,'#fff0b5');}
+ if(u.spirit){ctx.save();ctx.globalAlpha=.3;drawChampion(ctx,u.kind,u.spirit.x,u.spirit.y,.85);ctx.restore();line(u.spirit.x,u.spirit.y,u.x,u.y,'#ff749d90',2);circle(u.x,u.y,32,null,'#ff739c');}
+ if(u.arcaneMark){circle(u.x,u.y,35,null,'#ffd881');diamond(u.x,u.y-75,7,9,'#ffe99b','#c98632');}
+ if(u.kind==='yone'&&u.qStacks>=2)circle(u.x,u.y,33,null,'#b5e9ff');
  drawChampion(ctx,u.kind,u.x,u.y,.85,u.spin>0?now/70:0);
 
  health(u,55,u.y-39);text(`${u.name}${mine?' · 나':u.bot?' · 봇':''}`,u.x,u.y-49,11,mine?'#e7ffff':'#b7cbd8',600);
@@ -146,8 +151,8 @@ function draw(now){
  for(const u of [...state.minions,...state.players].map(u=>u.id===session.id&&predicted?predicted:motion.entity(u,now)).sort((a,b)=>a.y-b.y))drawUnit(u,now);
  for(const zone of state.zones||[]){circle(zone.x,zone.y,zone.radius,'#ffeaa526','#ffe49a');circle(zone.x,zone.y,20+Math.sin(now/90)*5,'#fff2b0');}
  const me=state.players.find(p=>p.id===session.id);if(me?.scout>0)for(const u of [...state.players,...state.minions].filter(u=>u.team!==me.team&&u.hp>0)){circle(u.x,u.y,u.range,null,'#a1ebff55');diamond(u.x,u.y-80,7,10,'#d1f5ff','#4ac5fa');}
- for(const raw of state.projectiles){const p=motion.entity(raw,now);ctx.save();ctx.shadowColor=palette[p.team];ctx.shadowBlur=18;if(p.visual==='ice-arrow'||p.visual==='ice'){const angle=p.vx?Math.atan2(p.vy,p.vx):p.team?Math.PI:0;ctx.translate(p.x,p.y);ctx.rotate(angle);const size=p.visual==='ice-arrow'?40:17;line(-size,0,size,0,'#b9f5ff',p.visual==='ice-arrow'?7:3);line(size-12,-12,size,0,'#e6fdff',3);line(size-12,12,size,0,'#e6fdff',3);}else if(p.type==='skill'){const tint=p.visual==='light'?'#ffe6a0':palette[p.team];circle(p.x,p.y,p.radius,tint+'50',tint);circle(p.x,p.y,5,'#efffff');}else circle(p.x,p.y,5,palette[p.team]);ctx.restore();}
- for(const e of state.effects){ctx.save();ctx.globalAlpha=Math.min(1,e.life*3);if(e.type==='laser'){line(e.x,e.y,e.tx,e.ty,'#ffe18a70',80);line(e.x,e.y,e.tx,e.ty,'#fff5c6',30);line(e.x,e.y,e.tx,e.ty,'#ffffff',8);}if(e.type==='execute'){line(e.x,e.y-180,e.x,e.y,'#ffd87c',14);diamond(e.x,e.y-10,28,42,'#fff1af','#ffffff');}if(e.type==='hawk'){line(e.x,e.y,e.tx,e.ty,'#a8edff80',3);text('⌁',e.x+(e.tx-e.x)*(1-e.life),e.y+(e.ty-e.y)*(1-e.life)-25,45,'#c7f5ff');}if(e.type==='shield')circle(e.x,e.y,48,null,'#fff0a9');if(e.type==='hit')text(e.text,e.x,e.y-35-(.25-e.life)*80,17,'#ffe6bb',800);if(e.type==='burst'){circle(e.x,e.y,e.radius,'#c3a9ff20',palette[e.team]);circle(e.x,e.y,e.radius*(1-e.life/.7),null,'#dcbdff');}if(e.type==='heal'){circle(e.x,e.y,50,'#9cffbb22','#9cffbb');text('+',e.x,e.y-30,25,'#9cffbb');}if(e.type==='dash')line(e.x,e.y,e.tx,e.ty,palette[e.team],8);ctx.restore();}
+ for(const raw of state.projectiles){const p=motion.entity(raw,now);ctx.save();ctx.shadowColor=palette[p.team];ctx.shadowBlur=18;if(['arcane','arcane-wave','mark','hook'].includes(p.visual)){const angle=Math.atan2(p.vy,p.vx);if(p.visual==='hook'){const owner=state.players.find(u=>u.id===p.owner);if(owner)line(owner.x,owner.y,p.x,p.y,'#c8a86b',3);}ctx.translate(p.x,p.y);ctx.rotate(angle);if(p.visual==='arcane-wave'){line(0,-44,16,0,'#ffdd86',11);line(16,0,0,44,'#7eeaff',11);}else if(p.visual==='mark')circle(0,0,20,null,'#ffdc86');else if(p.visual==='hook'){ctx.fillStyle='#eac462';ctx.fillRect(-13,-14,27,28);}else{line(-22,0,12,0,'#85ebff',7);diamond(12,0,14,7,'#dffcff','#88e7ff');}}else if(p.visual==='ice-arrow'||p.visual==='ice'){const angle=p.vx?Math.atan2(p.vy,p.vx):p.team?Math.PI:0;ctx.translate(p.x,p.y);ctx.rotate(angle);const size=p.visual==='ice-arrow'?40:17;line(-size,0,size,0,'#b9f5ff',p.visual==='ice-arrow'?7:3);line(size-12,-12,size,0,'#e6fdff',3);line(size-12,12,size,0,'#e6fdff',3);}else if(p.type==='skill'){const tint=p.visual==='light'?'#ffe6a0':palette[p.team];circle(p.x,p.y,p.radius,tint+'50',tint);circle(p.x,p.y,5,'#efffff');}else circle(p.x,p.y,5,palette[p.team]);ctx.restore();}
+ for(const e of state.effects){ctx.save();ctx.globalAlpha=Math.min(1,e.life*3);if(['arcane-bolt','hook-pull','soul-return','sword','wind-dash'].includes(e.type)){const tint=e.type==='hook-pull'?'#ffe28c':e.type==='arcane-bolt'?'#82ecff':'#ff8cac';line(e.x,e.y,e.tx,e.ty,tint,e.type==='wind-dash'?45:6);}if(e.type==='electric')circle(e.x,e.y,e.radius,'#ffda721c','#fff5b5');if(e.type==='cleave'){ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.arc(e.x,e.y,e.radius,e.angle-.8,e.angle+.8);ctx.closePath();ctx.fillStyle='#ff8eae50';ctx.fill();ctx.strokeStyle='#ffe2e9';ctx.stroke();}if(e.type==='laser'){line(e.x,e.y,e.tx,e.ty,'#ffe18a70',80);line(e.x,e.y,e.tx,e.ty,'#fff5c6',30);line(e.x,e.y,e.tx,e.ty,'#ffffff',8);}if(e.type==='execute'){line(e.x,e.y-180,e.x,e.y,'#ffd87c',14);diamond(e.x,e.y-10,28,42,'#fff1af','#ffffff');}if(e.type==='hawk'){line(e.x,e.y,e.tx,e.ty,'#a8edff80',3);text('⌁',e.x+(e.tx-e.x)*(1-e.life),e.y+(e.ty-e.y)*(1-e.life)-25,45,'#c7f5ff');}if(e.type==='shield')circle(e.x,e.y,48,null,'#fff0a9');if(e.type==='hit')text(e.text,e.x,e.y-35-(.25-e.life)*80,17,'#ffe6bb',800);if(e.type==='burst'){circle(e.x,e.y,e.radius,'#c3a9ff20',palette[e.team]);circle(e.x,e.y,e.radius*(1-e.life/.7),null,'#dcbdff');}if(e.type==='heal'){circle(e.x,e.y,50,'#9cffbb22','#9cffbb');text('+',e.x,e.y-30,25,'#9cffbb');}if(e.type==='dash')line(e.x,e.y,e.tx,e.ty,palette[e.team],8);ctx.restore();}
  if(marker&&now-marker.time<700){const t=(now-marker.time)/700;ctx.save();ctx.globalAlpha=1-t;circle(marker.x,Math.max(220,Math.min(540,marker.y)),10+t*18,null,'#b9fff4');ctx.restore();}
  if(now-lastState>4000){connected=false;text('연결이 지연되고 있어요. 잠시 기다려 주세요.',800,680,17,'#ffc89d');}
 }
