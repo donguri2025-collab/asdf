@@ -51,15 +51,15 @@ function hit(r,source,target,damage,kind='skill') {
  if(source.spirit&&target.type==='hero'&&kind!=='echo')source.spirit.damage[target.id]=(source.spirit.damage[target.id]||0)+(previousHp-target.hp);
  r.effects.push({type:'hit',x:target.x,y:target.y,life:.25,team:source.team,text:Math.round(damage)});
  if(target.hp===0){
-  if(target.type==='hero'){target.dead=7;target.deaths++;target.target=null;target.order='idle';target.windup=null;target.casting=null;target.shield=0;target.spirit=null;target.qStacks=0;target.qStackTime=0;target.arcaneMark=null;target.powerFist=0;target.overdrive=0;for(const k of ['root','stun','slow','silence','rapid','scout','haste','guard','spin','empowered'])target[k]=0;if(source.type==='hero')source.kills++;}
+  if(target.type==='hero'){target.dead=7;target.deaths++;target.target=null;target.order='idle';target.windup=null;target.casting=null;target.shield=0;target.pull=null;target.spirit=null;target.qStacks=0;target.qStackTime=0;target.arcaneMark=null;target.powerFist=0;target.overdrive=0;for(const k of ['root','stun','slow','silence','rapid','scout','haste','guard','spin','empowered'])target[k]=0;if(source.type==='hero')source.kills++;}
   if(target.type==='core')r.winner=source.team;
  }
 }
-function relocate(u,x,y){u.x=clamp(x,65,W-65);u.y=clamp(y,220,540);u.positionRevision=(u.positionRevision||0)+1;}
+function relocate(u,x,y){u.pull=null;u.x=clamp(x,65,W-65);u.y=clamp(y,220,540);u.positionRevision=(u.positionRevision||0)+1;}
 function move(u,target,dt){if(u.root>0||u.stun>0)return;const d=dist(u,target);if(d<=4){u.x=target.x;u.y=target.y;}if(d>4){const s=Math.min(d,u.speed*dt);u.x=clamp(u.x+(target.x-u.x)/d*s,65,W-65);u.y=clamp(u.y+(target.y-u.y)/d*s,220,540);}}
 function shot(r,p,target,damage,speed=680){r.projectiles.push({id:randomUUID(),x:p.x,y:p.y,team:p.team,owner:p.id,target:target.id,damage,speed,life:2,type:'attack',visual:p.kind==='ashe'?'ice':p.kind==='lux'?'light':null,slow:p.kind==='ashe'?1.5:0});}
 export function command(r,id,input){
- const p=r.players.find(p=>p.id===id&&!p.bot); if(!p||p.hp<=0||r.winner!==null)return false;
+ const p=r.players.find(p=>p.id===id&&!p.bot); if(!p||p.hp<=0||r.winner!==null||p.pull)return false;
  if(!Number.isFinite(input.x)||!Number.isFinite(input.y))return false;
  const aim={x:clamp(input.x,0,W),y:clamp(input.y,0,H)};
  if(Number.isSafeInteger(input.seq)){if(input.seq<=p.lastSeq)return false;p.lastSeq=input.seq;}
@@ -119,6 +119,11 @@ export function tick(r,dt){
  if(r.nextWave<=0){r.wave++;r.nextWave=13;for(let team=0;team<2;team++)for(let i=0;i<3;i++)r.minions.push({id:randomUUID(),type:'minion',team,x:team?1390+i*26:210-i*26,y:330+i*50,hp:190,maxHp:190,speed:70,damage:15,range:115,attack:0});}
  for(const e of r.effects)e.life-=dt;r.effects=r.effects.filter(e=>e.life>0);
  for(const u of [...r.players,...r.minions]){
+  if(u.pull){
+   const pull=u.pull;pull.elapsed=Math.min(pull.duration,pull.elapsed+dt);
+   const t=pull.elapsed/pull.duration;u.x=pull.fromX+(pull.toX-pull.fromX)*t;u.y=pull.fromY+(pull.toY-pull.fromY)*t;
+   if(t>=1)u.pull=null;
+  }
   if(u.arcaneMark){u.arcaneMark.remaining-=dt;if(u.arcaneMark.remaining<=0)u.arcaneMark=null;}
   if(u.overdrive>0&&u.overdrive<=dt)u.slow=Math.max(u.slow||0,1.5);
   if(u.qStackTime>0){u.qStackTime=Math.max(0,u.qStackTime-dt);if(!u.qStackTime)u.qStacks=0;}
@@ -202,7 +207,12 @@ export function tick(r,dt){
      if(b.mark)t.arcaneMark={owner:owner.id,remaining:4};else hit(r,owner,t,b.damage);
      applyStatus(t,b);b.groupHits?.push(t.id);
      if(b.reduceCooldown&&owner.cd)for(const key of ['q','w','e','r'])owner.cd[key]=Math.max(0,owner.cd[key]-1.5);
-     if(b.pull&&owner.hp>0&&t.hp>0){const d=dist(owner,t)||1;const old={x:t.x,y:t.y};relocate(t,owner.x+(t.x-owner.x)/d*65,owner.y+(t.y-owner.y)/d*65);t.stun=Math.max(t.stun||0,.65);t.windup=null;r.effects.push({type:'hook-pull',x:owner.x,y:owner.y,tx:old.x,ty:old.y,team:owner.team,life:.4});}
+     if(b.pull&&owner.hp>0&&t.hp>0){
+      const d=dist(owner,t)||1,toX=clamp(owner.x+(t.x-owner.x)/d*Math.min(65,d),65,W-65),toY=clamp(owner.y+(t.y-owner.y)/d*Math.min(65,d),220,540);
+      const duration=Math.max(.15,Math.min(.55,Math.hypot(toX-t.x,toY-t.y)/950));
+      t.pull={owner:owner.id,fromX:t.x,fromY:t.y,toX,toY,duration,elapsed:0};
+      t.stun=Math.max(t.stun||0,duration+.18);t.windup=null;t.casting=null;t.target=null;t.order='idle';
+     }
     }
     if(b.hitIds.length>=(b.pierce||1)){b.life=0;break;}
    }

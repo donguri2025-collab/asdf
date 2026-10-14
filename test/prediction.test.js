@@ -29,7 +29,7 @@ test('delayed authoritative snapshots cannot drag walking backwards or stop pred
  assert.ok(p.local.x>300);
  const target={...p.local.target};p.input({type:'attackMove',x:400,y:220,seq:2},650);assert.deepEqual(p.local.target,target);
 });
-test('short champion blinks, hooks and spirit returns snap using position revision',()=>{
+test('short champion blinks and spirit returns snap using position revision',()=>{
  const p=new Prediction(),h={...hero(),positionRevision:0};p.receive(h,100);
  p.receive({...h,x:230,positionRevision:1},150);assert.equal(p.local.x,230);assert.deepEqual(p.correction,{x:0,y:0});
  p.receive({...h,positionRevision:2},200);assert.equal(p.local.x,170);
@@ -44,4 +44,11 @@ test('Flash predicts instantly, survives stale snapshots, and confirms or rolls 
 });
 test('Flash prediction respects crowd control, casting and cooldown',()=>{
  for(const blocked of [{stun:1},{root:1},{silence:1},{casting:{}},{cd:{f:3}}]){const p=new Prediction();p.receive({...hero(),...blocked},100);p.input({type:'skill',key:'f',seq:1,x:1000,y:380},110);assert.equal(p.local.x,170);assert.equal(p.flash,null);}
+});
+test('local hook victim is interpolated between snapshots and cannot predict walking out',()=>{
+ const p=new Prediction(),h={...hero(),x:1000,positionRevision:0};p.receive(h,100);
+ const pull={owner:'enemy',toX:715,toY:380};p.receive({...h,x:940,pull,stun:.5},167);
+ assert.equal(p.local.x,1000);p.step(.016,state,200);assert.ok(p.local.x<1000&&p.local.x>940);
+ const x=p.local.x;p.input({type:'move',seq:1,x:1400,y:380},201);assert.equal(p.pending,null);assert.equal(p.local.x,x);
+ p.receive({...h,x:880,pull,stun:.4},234);p.step(.016,state,267);assert.ok(p.local.x<x&&p.local.x>880);
 });

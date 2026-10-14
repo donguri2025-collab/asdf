@@ -88,7 +88,7 @@ function updateHud(){
  $('#connection').textContent=state.players.some(p=>p.bot)?'봇 연습 대전 · 친구 입장 가능':'2명 연결됨 · 온라인 대전';
  $('#siege-status').hidden=state.time<180;
  $('#skill-r').classList.toggle('casting',!!me.casting);
- $('#notice').textContent=attackMode?'우선 공격할 적 근처를 좌클릭하세요':me.stun>0?'기절!':me.root>0?'속박!':me.silence>0?'침묵 — 스킬 사용 불가':me.casting?'궁극기 시전 중…':me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
+ $('#notice').textContent=attackMode?'우선 공격할 적 근처를 좌클릭하세요':me.pull?'그랩에 끌려오는 중':me.stun>0?'기절!':me.root>0?'속박!':me.silence>0?'침묵 — 스킬 사용 불가':me.casting?'궁극기 시전 중…':me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
  if(state.winner!==null){$('#result').hidden=false;$('#result-title').textContent=state.winner===me.team?'VICTORY':'DEFEAT';$('#result-copy').textContent=state.winner===me.team?'상대 코어를 파괴했습니다. 멋진 한 판이었어요!':'우리 코어가 파괴되었습니다. 다시 도전해 보세요.';}
 }
 function circle(x,y,r,fill,stroke){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.stroke();}}
@@ -131,6 +131,7 @@ function drawStructure(u,now){
 }
 function drawUnit(u,now){
  if(u.hp<=0)return;const color=palette[u.team];
+ if(u.pull){const owner=state.players.find(p=>p.id===u.pull.owner);if(owner){const from=motion.entity(owner,now);line(from.x,from.y,u.x,u.y,'#ffe098',4);circle(u.x,u.y,24,null,'#ffe098');}}
  if(u.id===selectedId)circle(u.x,u.y,36,null,'#ffba73');
  if(u.shield>0)circle(u.x,u.y,34,'#8bcaff20','#a5d7ff');
  if(u.windup){circle(u.x,u.y,28+u.windup.remaining*35,null,'#fff2b3');}

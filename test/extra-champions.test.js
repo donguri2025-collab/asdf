@@ -19,7 +19,7 @@ test('Ezreal R passes through multiple enemies and towers',()=>{
  assert.equal(b.hp,b.maxHp-220);assert.equal(r.minions[0].hp,280);assert.equal(r.structures.find(u=>u.id==='tower1').hp,800);
 });
 test('Blitz Q pulls the first enemy and is blocked by minions',()=>{
- const {r,a,b}=duel('blitzcrank');cast(r,a,'q');advance(r,.6);assert.ok(Math.abs(b.x-a.x-65)<.01);assert.equal(b.positionRevision,1);assert.ok(b.stun>0);
+ const {r,a,b}=duel('blitzcrank');cast(r,a,'q');advance(r,.55);assert.ok(b.pull);assert.ok(b.x<1000&&b.x>a.x+65);assert.ok(b.stun>0);advance(r,.35);assert.ok(Math.abs(b.x-a.x-65)<.01);assert.equal(b.positionRevision,0);assert.equal(b.pull,null);
  const other=duel('blitzcrank');other.r.minions.push({id:'block',type:'minion',team:1,x:800,y:380,hp:500,maxHp:500,root:100,speed:70,damage:0,range:0,attack:99});cast(other.r,other.a,'q');advance(other.r,.6);assert.equal(other.b.x,1000);assert.ok(other.r.minions[0].x<800);
 });
 test('Blitz W speeds up then slows, E knocks up, R breaks shields and silences',()=>{
@@ -46,4 +46,13 @@ test('Yone E auto-returns at five seconds, but death cancels the tether',()=>{
 test('Yone R relocates and groups enemies; rooted mobility skills are rejected',()=>{
  const {r,a,b}=duel('yone');cast(r,a,'r',1200);advance(r,.3);assert.equal(a.x,650);advance(r,.4);assert.equal(a.x,1100);assert.equal(b.x,1135);assert.equal(b.hp,b.maxHp-210);assert.ok(b.stun>0);
  for(const kind of ['ezreal','yone']){const {r,a}=duel(kind);a.root=1;assert.equal(cast(r,a,'e'),false);assert.equal(a.cd.e,0);}
+});
+test('hook pull advances continuously, blocks input, and death stops the pull',()=>{
+ const {r,a,b}=duel('blitzcrank');cast(r,a,'q');
+ for(let i=0;i<60&&!b.pull;i++)tick(r,1/60);
+ assert.ok(b.pull);const initial=b.x;assert.equal(command(r,b.id,{type:'move',x:1400,y:380}),false);assert.equal(cast(r,b,'f',1400),false);
+ const positions=[b.x];for(let i=0;i<6;i++){tick(r,1/60);positions.push(b.x);}
+ for(let i=1;i<positions.length;i++){assert.ok(positions[i]<positions[i-1]);assert.ok(positions[i-1]-positions[i]<=950/60+.001);}
+ assert.ok(b.x<initial&&b.x>a.x+65);
+ b.hp=1;r.projectiles.push({id:'lethal',type:'attack',x:b.x,y:b.y,team:a.team,owner:a.id,target:b.id,damage:100,speed:680,life:1});tick(r,1/60);assert.equal(b.hp,0);assert.equal(b.pull,null);
 });
