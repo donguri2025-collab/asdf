@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Motion } from '../public/motion.js';
-const state=(x,time,extra={})=>({time,players:[{id:'hero',x,y:380,hp:100,speed:215,cd:{e:0},...extra}],minions:[],projectiles:[]});
+const state=(x,time,extra={})=>({time,players:[{id:'hero',x,y:380,hp:100,speed:215,cd:{f:0},...extra}],minions:[],projectiles:[]});
 test('15Hz snapshots produce continuous positions at 60Hz without mutating server state',()=>{
  const m=new Motion();m.push(state(0,0),0);
  const packet=state(14,1/15);m.push(packet,1000/15);
@@ -16,7 +16,7 @@ test('interpolation stops at the authoritative target, and freezes during networ
  m.push(state(200,1),5000);assert.equal(m.sample('hero',5000).x,200);
 });
 test('dash, respawn, and removed entities do not leave visual trails',()=>{
- const m=new Motion();m.push(state(100,0),0);m.push(state(160,1/15,{cd:{e:7}}),67);
+ const m=new Motion();m.push(state(100,0),0);m.push(state(160,1/15,{cd:{f:7}}),67);
  assert.equal(m.sample('hero',67).x,160);
  m.push(state(160,2/15,{hp:0}),134);m.push(state(170,3/15),201);assert.equal(m.sample('hero',201).x,170);
  m.push({time:4/15,players:[],minions:[],projectiles:[]},268);assert.equal(m.sample('hero',268),null);

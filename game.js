@@ -9,7 +9,7 @@ const dist = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (n,a,b) => Math.max(a,Math.min(b,n));
 function player(team, kind='ranger', bot=false) {
  const c=heroes[kind] || heroes.ranger;
- return {id:randomUUID(),type:'hero',team,kind:heroes[kind]?kind:'ranger',name:bot?'연습 봇':c.name,bot,x:team?1430:170,y:380,hp:c.hp,maxHp:c.hp,range:c.range,damage:c.damage,speed:c.speed,target:null,attack:0,cd:{q:0,w:0,e:0},dead:0,kills:0,deaths:0};
+ return {id:randomUUID(),type:'hero',team,kind:heroes[kind]?kind:'ranger',name:bot?'연습 봇':c.name,bot,x:team?1430:170,y:380,hp:c.hp,maxHp:c.hp,range:c.range,damage:c.damage,speed:c.speed,target:null,order:'idle',attackTarget:null,windup:null,casting:null,shield:0,shieldTime:0,lastSeq:0,attack:0,cd:{q:0,w:0,e:0,r:0,d:0,f:0},dead:0,kills:0,deaths:0};
 }
 export function createRoom(code) {
  return {code,time:0,wave:0,nextWave:2,players:[],minions:[],projectiles:[],effects:[],structures:[0,1].flatMap(team=>[
@@ -31,10 +31,11 @@ export function removePlayer(room,id) {
 function units(r) {return [...r.players,...r.minions,...r.structures].filter(u=>u.hp>0);}
 function hit(r,source,target,damage) {
  if(target.type==='core' && r.structures.some(s=>s.team===target.team&&s.type==='tower'&&s.hp>0))return;
+ if(target.shield>0){const absorbed=Math.min(target.shield,damage);target.shield-=absorbed;damage-=absorbed;}
  target.hp=Math.max(0,target.hp-damage);
  r.effects.push({type:'hit',x:target.x,y:target.y,life:.25,team:source.team,text:Math.round(damage)});
  if(target.hp===0){
-  if(target.type==='hero'){target.dead=7;target.deaths++;target.target=null;if(source.type==='hero')source.kills++;}
+  if(target.type==='hero'){target.dead=7;target.deaths++;target.target=null;target.order='idle';target.windup=null;target.casting=null;target.shield=0;if(source.type==='hero')source.kills++;}
   if(target.type==='core')r.winner=source.team;
  }
 }
@@ -44,46 +45,77 @@ export function command(r,id,input){
  const p=r.players.find(p=>p.id===id&&!p.bot); if(!p||p.hp<=0||r.winner!==null)return false;
  if(!Number.isFinite(input.x)||!Number.isFinite(input.y))return false;
  const aim={x:clamp(input.x,0,W),y:clamp(input.y,0,H)};
- if(input.type==='move'){p.target={x:clamp(aim.x,65,W-65),y:clamp(aim.y,220,540)};return true;}
- if(input.type==='stop'){p.target=null;return true;}
- if(input.type!=='skill'||!['q','w','e'].includes(input.key)||p.cd[input.key]>0)return false;
+ if(Number.isSafeInteger(input.seq)){if(input.seq<=p.lastSeq)return false;p.lastSeq=input.seq;}
+ if(['move','attackMove','attack'].includes(input.type)){
+  if(input.type==='attack'&&!units(r).some(u=>u.id===input.targetId&&u.team!==p.team&&attackable(r,u)))return false;
+  p.order=input.type;p.attackTarget=input.type==='attack'?input.targetId:null;
+  p.target={x:clamp(aim.x,65,W-65),y:clamp(aim.y,220,540)};p.windup=null;return true;
+ }
+ if(input.type!=='skill'||!['q','w','e','r','d','f'].includes(input.key)||p.cd[input.key]>0||p.casting)return false;
  cast(r,p,input.key,aim);return true;
 }
+function attackable(r,u){return u.hp>0&&!(u.type==='core'&&r.structures.some(s=>s.team===u.team&&s.type==='tower'&&s.hp>0));}
+function area(r,p,center,radius,damage){
+ r.effects.push({type:'burst',x:center.x,y:center.y,radius,team:p.team,life:.6});
+ for(const enemy of units(r).filter(u=>u.team!==p.team&&dist(u,center)<radius))hit(r,p,enemy,damage);
+}
 function cast(r,p,key,aim){
+ const d=dist(p,aim)||1;
+ const center={x:clamp(p.x+(aim.x-p.x)*Math.min(1,350/d),65,W-65),y:clamp(p.y+(aim.y-p.y)*Math.min(1,350/d),220,540)};
  if(key==='q'){
-  p.cd.q=p.kind==='mage'?4:3;const d=dist(p,aim)||1;
-  r.projectiles.push({id:randomUUID(),x:p.x,y:p.y,vx:(aim.x-p.x)/d*620,vy:(aim.y-p.y)/d*620,team:p.team,owner:p.id,damage:p.kind==='mage'?130:100,life:.9,type:'skill',radius:p.kind==='mage'?23:14});
- } else if(key==='w'){
-  p.cd.w=8;const radius=p.kind==='mage'?170:145;
-  const center=p.kind==='mage'?{x:p.x+(aim.x-p.x)*Math.min(1,250/(dist(p,aim)||1)),y:p.y+(aim.y-p.y)*Math.min(1,250/(dist(p,aim)||1))}:p;
-  r.effects.push({type:'burst',x:center.x,y:center.y,radius,team:p.team,life:.6});
-  for(const enemy of units(r).filter(u=>u.team!==p.team&&dist(u,center)<radius))hit(r,p,enemy,p.kind==='knight'?145:110);
- } else {
-  p.cd.e=7;const d=dist(p,aim)||1;const old={x:p.x,y:p.y};
-  p.x=clamp(p.x+(aim.x-p.x)/d*Math.min(180,d),65,W-65);p.y=clamp(p.y+(aim.y-p.y)/d*Math.min(180,d),220,540);p.target=null;
+  p.cd.q=4;r.projectiles.push({id:randomUUID(),x:p.x,y:p.y,vx:(aim.x-p.x)/d*620,vy:(aim.y-p.y)/d*620,team:p.team,owner:p.id,damage:130,life:.9,type:'skill',radius:18});
+ }else if(key==='w'){p.cd.w=8;area(r,p,center,145,110);
+ }else if(key==='e'){p.cd.e=10;p.shield=180;p.shieldTime=3;
+ }else if(key==='r'){p.cd.r=30;p.windup=null;p.casting={x:center.x,y:center.y,remaining:.65};
+ }else if(key==='d'){p.cd.d=45;p.hp=Math.min(p.maxHp,p.hp+p.maxHp*.3);r.effects.push({type:'heal',x:p.x,y:p.y,team:p.team,life:.6});
+ }else if(key==='f'){
+  p.cd.f=45;const old={x:p.x,y:p.y};p.x=clamp(p.x+(aim.x-p.x)/d*Math.min(180,d),65,W-65);p.y=clamp(p.y+(aim.y-p.y)/d*Math.min(180,d),220,540);
+  p.target=null;p.order='idle';p.attackTarget=null;p.windup=null;
   r.effects.push({type:'dash',x:old.x,y:old.y,tx:p.x,ty:p.y,team:p.team,life:.4});
  }
 }
+
 export function tick(r,dt){
  if(r.winner!==null)return;
  r.time+=dt;r.nextWave-=dt;
  if(r.nextWave<=0){r.wave++;r.nextWave=13;for(let team=0;team<2;team++)for(let i=0;i<3;i++)r.minions.push({id:randomUUID(),type:'minion',team,x:team?1390+i*26:210-i*26,y:330+i*50,hp:190,maxHp:190,speed:70,damage:15,range:115,attack:0});}
  for(const e of r.effects)e.life-=dt;r.effects=r.effects.filter(e=>e.life>0);
  for(const p of r.players){
-  for(const k of ['q','w','e'])p.cd[k]=Math.max(0,p.cd[k]-dt);
+  for(const k of Object.keys(p.cd))p.cd[k]=Math.max(0,p.cd[k]-dt);
   if(p.hp<=0){p.dead-=dt;if(p.dead<=0){p.hp=p.maxHp;p.x=p.team?1430:170;p.y=380;}continue;}
   if((p.team===0&&p.x<225)||(p.team===1&&p.x>1375))p.hp=Math.min(p.maxHp,p.hp+90*dt);
-  if(p.bot){const enemies=units(r).filter(u=>u.team!==p.team);const enemy=enemies.sort((a,b)=>dist(p,a)-dist(p,b))[0];
-   if(enemy){if(p.hp<p.maxHp*.3)p.target={x:p.team?1430:170,y:380};else if(dist(p,enemy)>p.range*.85)p.target={x:enemy.x,y:enemy.y};else p.target=null;
+  p.attack=Math.max(0,p.attack-dt);p.shieldTime=Math.max(0,p.shieldTime-dt);if(!p.shieldTime)p.shield=0;
+  if(p.casting){p.casting.remaining-=dt;if(p.casting.remaining<=0){area(r,p,p.casting,210,260);p.casting=null;}continue;}
+  const enemies=units(r).filter(u=>u.team!==p.team&&attackable(r,u)).sort((a,b)=>dist(p,a)-dist(p,b));
+  if(p.bot){
+   const enemy=enemies[0];
+   if(p.hp<p.maxHp*.3){p.order='move';p.target={x:p.team?1430:170,y:380};p.attackTarget=null;if(p.cd.d===0)cast(r,p,'d',p);}
+   else if(enemy){p.order='attack';p.attackTarget=enemy.id;
     if(dist(p,enemy)<460&&p.cd.q===0)cast(r,p,'q',enemy);
-    if(dist(p,enemy)<180&&p.cd.w===0)cast(r,p,'w',enemy);
+    if(dist(p,enemy)<300&&p.cd.w===0)cast(r,p,'w',enemy);
+    if(dist(p,enemy)<250&&p.cd.e===0)cast(r,p,'e',p);
    }
   }
-  if(p.target){move(p,p.target,dt);if(dist(p,p.target)<5)p.target=null;}
+  let enemy=p.order==='attack'?enemies.find(u=>u.id===p.attackTarget):p.order==='attackMove'?enemies.find(u=>dist(p,u)<=p.range):null;
+  if(p.order==='attack'&&!enemy){p.order='idle';p.attackTarget=null;p.target=null;}
+  if(p.windup){
+   p.windup.remaining-=dt;
+   if(!enemy||enemy.id!==p.windup.id||dist(p,enemy)>p.range+25)p.windup=null;
+   else if(p.windup.remaining<=0){
+    p.windup=null;p.attack=.5;
+    if(p.kind==='knight'){hit(r,p,enemy,p.damage);r.effects.push({type:'dash',x:p.x,y:p.y,tx:enemy.x,ty:enemy.y,team:p.team,life:.15});}
+    else shot(r,p,enemy,p.damage);
+   }
+   continue;
+  }
+  if(enemy&&dist(p,enemy)<=p.range){p.attackTarget=enemy.id;if(p.attack===0)p.windup={id:enemy.id,remaining:.22};continue;}
+  if(p.order==='attack'&&enemy)move(p,enemy,dt);
+  else if(p.target){move(p,p.target,dt);if(dist(p,p.target)<5){p.target=null;if(p.order==='move')p.order='idle';}}
  }
+
  const all=units(r);
  for(const u of all){
-  if(u.type==='core')continue;u.attack=Math.max(0,u.attack-dt);
+  if(u.type==='core'||u.type==='hero')continue;u.attack=Math.max(0,u.attack-dt);
   const enemies=all.filter(v=>v.team!==u.team&&!(v.type==='core'&&r.structures.some(s=>s.type==='tower'&&s.team===v.team&&s.hp>0)));
   const inRange=enemies.filter(v=>dist(u,v)<=u.range).sort((a,b)=>(u.type==='tower'? (a.type==='minion'?0:1)-(b.type==='minion'?0:1):0)||dist(u,a)-dist(u,b));
   const enemy=inRange[0];

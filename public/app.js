@@ -1,3 +1,6 @@
+import { Prediction } from './prediction.js';
+const prediction = new Prediction();
+let sequence=0,attackMode=false,selectedId=null,lastFrame=0,inputQueue=Promise.resolve();
 import { Motion } from './motion.js';
 const motion = new Motion();
 const $=s=>document.querySelector(s);
@@ -12,32 +15,61 @@ const initialCode=new URLSearchParams(location.search).get('room');if(initialCod
 async function post(path,data){const res=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await res.json();if(!res.ok)throw Error(result.error||'연결에 실패했어요.');return result;}
 async function join(code=''){
  $('#error').textContent='';$('#create').disabled=$('#join').disabled=true;
- try{session=await post('/api/join',{hero,code});$('#lobby').hidden=true;$('#game').hidden=false;$('#result').hidden=true;$('#code-label').textContent=session.code;
+ try{session=await post('/api/join',{hero,code});document.body.classList.add('in-match');$('#lobby').hidden=true;$('#game').hidden=false;$('#result').hidden=true;$('#code-label').textContent=session.code;
  stream=new EventSource(`/api/events?id=${encodeURIComponent(session.id)}`);
- stream.onmessage=e=>{state=JSON.parse(e.data);lastState=performance.now();motion.push(state,lastState);connected=true;updateHud();};
+ stream.onmessage=e=>{state=JSON.parse(e.data);lastState=performance.now();motion.push(state,lastState);prediction.receive(state.players.find(p=>p.id===session?.id),lastState);connected=true;updateHud();};
  stream.onerror=()=>{connected=false;$('#connection').textContent='연결이 끊겼어요 · 재연결 중';};
  }catch(e){$('#error').textContent=e.message;}finally{$('#create').disabled=$('#join').disabled=false;}
 }
 $('#create').onclick=()=>join();$('#join').onclick=()=>{const code=$('#room-code').value.trim();if(!/^\d{6}$/.test(code)){$('#error').textContent='6자리 방 코드를 입력해 주세요.';return;}join(code);};
 $('#room-code').onkeydown=e=>{if(e.key==='Enter')$('#join').click();};
-async function leave(){stream?.close();const old=session;session=null;state=null;motion.reset();connected=false;$('#game').hidden=true;$('#lobby').hidden=false;$('#result').hidden=true;if(old)try{await post('/api/leave',{id:old.id});}catch{} }
+async function leave(){stream?.close();const old=session;session=null;state=null;motion.reset();prediction.reset();sequence=0;attackMode=false;selectedId=null;document.body.classList.remove('in-match');connected=false;$('#game').hidden=true;$('#lobby').hidden=false;$('#result').hidden=true;if(old)try{await post('/api/leave',{id:old.id});}catch{} }
 $('#leave').onclick=leave;$('#again').onclick=leave;
 $('#second-tab').onclick=()=>{if(session)window.open(`${location.pathname}?room=${session.code}`,'_blank','noopener');};
 $('#copy').onclick=async()=>{if(!session)return;try{await navigator.clipboard.writeText(session.code);$('#connection').textContent='방 코드를 복사했어요';}catch{$('#connection').textContent=`친구에게 ${session.code} 코드를 알려주세요`;}};
-function send(type,key){if(session&&connected)post('/api/input',{id:session.id,type,key,...mouse}).catch(()=>{$('#connection').textContent='명령 전송 실패 · 연결을 확인해 주세요';});}
-function pointer(e){const r=canvas.getBoundingClientRect();mouse={x:(e.clientX-r.left)/r.width*1600,y:(e.clientY-r.top)/r.height*760};}
-canvas.addEventListener('pointermove',pointer);canvas.addEventListener('pointerdown',e=>{e.preventDefault();pointer(e);send('move');marker={...mouse,time:performance.now()};});canvas.oncontextmenu=e=>e.preventDefault();
-window.addEventListener('keydown',e=>{if(!session||e.repeat||e.ctrlKey||e.metaKey||e.altKey||['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;const key=e.key.toLowerCase();if(['q','w','e'].includes(key)){e.preventDefault();send('skill',key);}if(key==='s')send('stop');});
+function send(type,key,targetId){
+ if(!session||!connected||state?.winner!==null)return;
+ const data={id:session.id,type,key,targetId,...mouse,seq:++sequence};
+ prediction.input(data,performance.now());
+ inputQueue=inputQueue.catch(()=>{}).then(()=>post('/api/input',data)).catch(()=>{$('#connection').textContent='명령 전송 실패 · 연결을 확인해 주세요';});
+}
+function pointer(e){
+ const r=canvas.getBoundingClientRect(),scale=Math.min(r.width/1600,r.height/760);
+ const left=r.left+(r.width-1600*scale)/2,top=r.top+(r.height-760*scale)/2;
+ mouse={x:(e.clientX-left)/scale,y:(e.clientY-top)/scale};
+ return mouse.x>=0&&mouse.x<=1600&&mouse.y>=0&&mouse.y<=760;
+}
+function enemyAtMouse(){
+ const me=state?.players.find(p=>p.id===session?.id);if(!me)return null;
+ return [...state.players,...state.minions,...state.structures].filter(u=>u.hp>0&&u.team!==me.team).map(u=>motion.entity(u,performance.now())).filter(u=>Math.hypot(u.x-mouse.x,u.y-mouse.y)<(u.type==='hero'?32:u.type==='minion'?21:65)).sort((a,b)=>Math.hypot(a.x-mouse.x,a.y-mouse.y)-Math.hypot(b.x-mouse.x,b.y-mouse.y))[0];
+}
+canvas.addEventListener('pointermove',pointer);
+canvas.addEventListener('pointerdown',e=>{
+ e.preventDefault();if(!pointer(e))return;
+ if(e.button===2){attackMode=false;const enemy=enemyAtMouse();selectedId=enemy?.id||null;send(enemy?'attack':'move',null,enemy?.id);}
+ else if(e.button===0&&attackMode){attackMode=false;selectedId=null;send('attackMove');}
+ else if(e.button===0){selectedId=enemyAtMouse()?.id||null;return;}else return;
+ canvas.classList.remove('attack-mode');marker={...mouse,time:performance.now()};
+});canvas.oncontextmenu=e=>e.preventDefault();
+window.addEventListener('keydown',e=>{
+ if(!session||e.repeat||e.ctrlKey||e.metaKey||e.altKey||['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+ const key=e.key.toLowerCase();
+ if(['q','w','e','r','d','f'].includes(key)){e.preventDefault();send('skill',key);}
+ if(key==='a'){e.preventDefault();attackMode=true;canvas.classList.add('attack-mode');}
+ if(key==='escape'){attackMode=false;canvas.classList.remove('attack-mode');}
+});
+for(const name of ['help','settings'])$('#'+name+'-toggle').onclick=()=>{const panel=$('#'+name+'-panel');panel.hidden=!panel.hidden;$('#'+name+'-toggle').setAttribute('aria-expanded',String(!panel.hidden));};
 window.addEventListener('pagehide',()=>{if(session)navigator.sendBeacon('/api/leave',new Blob([JSON.stringify({id:session.id})],{type:'application/json'}));});
 function updateHud(){
  const me=state.players.find(p=>p.id===session?.id);if(!me)return;
  $('#my-name').textContent=me.name;$('#my-team').textContent=me.team?'레드 팀 · 오른쪽 기지':'블루 팀 · 왼쪽 기지';$('#my-icon').className=`portrait ${me.kind}`;$('#my-icon').textContent=icons[me.kind];
- $('#health-bar').style.width=`${100*me.hp/me.maxHp}%`;$('#health-label').textContent=`${Math.ceil(me.hp)} / ${me.maxHp} HP`;
- for(const key of ['q','w','e']){const el=$(`#skill-${key}`);el.classList.toggle('cooldown',me.cd[key]>0);el.querySelector('b').textContent=Math.ceil(me.cd[key]);}
+ $('#health-bar').style.width=`${100*me.hp/me.maxHp}%`;$('#health-label').textContent=`${Math.ceil(me.hp)} / ${me.maxHp} HP${me.shield>0?' + 보호막 '+Math.ceil(me.shield):''}`;
+ for(const key of ['q','w','e','r','d','f']){const el=$(`#skill-${key}`);el.classList.toggle('cooldown',me.cd[key]>0);el.querySelector('b').textContent=Math.ceil(me.cd[key]);}
  $('#clock').textContent=`${String(Math.floor(state.time/60)).padStart(2,'0')}:${String(Math.floor(state.time%60)).padStart(2,'0')}`;$('#wave').textContent=`WAVE ${state.wave}`;
  $('#score-blue').textContent=state.players.filter(p=>p.team===0).reduce((n,p)=>n+p.kills,0);$('#score-red').textContent=state.players.filter(p=>p.team===1).reduce((n,p)=>n+p.kills,0);
  $('#connection').textContent=state.players.some(p=>p.bot)?'봇 연습 대전 · 친구 입장 가능':'2명 연결됨 · 온라인 대전';
- $('#notice').textContent=me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
+ $('#skill-r').classList.toggle('casting',!!me.casting);
+ $('#notice').textContent=attackMode?'공격 이동할 위치를 좌클릭하세요':me.casting?'궁극기 시전 중…':me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
  if(state.winner!==null){$('#result').hidden=false;$('#result-title').textContent=state.winner===me.team?'VICTORY':'DEFEAT';$('#result-copy').textContent=state.winner===me.team?'상대 코어를 파괴했습니다. 멋진 한 판이었어요!':'우리 코어가 파괴되었습니다. 다시 도전해 보세요.';}
 }
 function circle(x,y,r,fill,stroke){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.stroke();}}
@@ -79,21 +111,27 @@ function drawStructure(u,now){
  }
 }
 function drawUnit(u,now){
- if(u.hp<=0)return;const color=palette[u.team];circle(u.x,u.y+13,u.type==='hero'?22:12,'#05121b65');
+ if(u.hp<=0)return;const color=palette[u.team];
+ if(u.id===selectedId)circle(u.x,u.y,36,null,'#ffba73');
+ if(u.shield>0)circle(u.x,u.y,34,'#8bcaff20','#a5d7ff');
+ if(u.windup){circle(u.x,u.y,28+u.windup.remaining*35,null,'#fff2b3');}
+ if(u.casting){circle(u.casting.x,u.casting.y,210,'#ffbc7125','#ffd798');text('궁극기',u.casting.x,u.casting.y,16,'#ffe4b3');}
+circle(u.x,u.y+13,u.type==='hero'?22:12,'#05121b65');
  if(u.type==='minion'){circle(u.x,u.y,12,u.team?'#674956':'#3b6676',color);ctx.fillStyle=color;ctx.fillRect(u.x-5,u.y-6,10,7);line(u.x+(u.team?-15:15),u.y-10,u.x+(u.team?-15:15),u.y+13,'#afc2c8',2);health(u,27,u.y-23);return;}
  const mine=u.id===session?.id;
- if(mine){ctx.setLineDash([5,8]);circle(u.x,u.y,u.range,null,'#b8effb16');ctx.setLineDash([]);circle(u.x,u.y,30,null,'#ddfcff');diamond(u.x,u.y-70,5,5,'#efffff','#efffff');}
+ if(mine){if($('#range-toggle').checked||attackMode){ctx.setLineDash([5,8]);circle(u.x,u.y,u.range,null,attackMode?'#ffcc7780':'#b8effb30');ctx.setLineDash([]);}circle(u.x,u.y,30,null,'#ddfcff');diamond(u.x,u.y-70,5,5,'#efffff','#efffff');}
  circle(u.x,u.y,24,u.kind==='mage'?'#40314f':u.kind==='knight'?'#554332':'#294d5b',color);ctx.save();ctx.shadowColor=color;ctx.shadowBlur=15;text(icons[u.kind],u.x,u.y+10,30,u.kind==='mage'?'#ddc2ff':u.kind==='knight'?'#ffe0ab':'#b6efff');ctx.restore();
  health(u,55,u.y-39);text(mine?'나':u.bot?'연습 봇':'상대 플레이어',u.x,u.y-49,11,mine?'#e7ffff':'#b7cbd8',600);
  if(mine&&u.target){line(u.x,u.y,u.target.x,u.target.y,'#98e9ed20');}
 }
 function draw(now){
- requestAnimationFrame(draw);if(!session)return;background(now);
+ requestAnimationFrame(draw);const dt=lastFrame?Math.min(.05,(now-lastFrame)/1000):0;lastFrame=now;if(!session)return;background(now);
  if(!state){text('전장에 연결하는 중…',800,380,24);return;}
- for(const s of state.structures)drawStructure(s,now);
- for(const u of [...state.minions,...state.players].map(u=>motion.entity(u,now)).sort((a,b)=>a.y-b.y))drawUnit(u,now);
+ const predicted=prediction.step(dt,state,now);
+ for(const s of state.structures){drawStructure(s,now);if(s.id===selectedId&&s.hp>0)circle(s.x,s.y,70,null,'#ffba73');}
+ for(const u of [...state.minions,...state.players].map(u=>u.id===session.id&&predicted?predicted:motion.entity(u,now)).sort((a,b)=>a.y-b.y))drawUnit(u,now);
  for(const raw of state.projectiles){const p=motion.entity(raw,now);ctx.save();ctx.shadowColor=palette[p.team];ctx.shadowBlur=18;if(p.type==='skill'){circle(p.x,p.y,p.radius,palette[p.team]+'50',palette[p.team]);circle(p.x,p.y,5,'#efffff');}else circle(p.x,p.y,5,palette[p.team]);ctx.restore();}
- for(const e of state.effects){ctx.save();ctx.globalAlpha=Math.min(1,e.life*3);if(e.type==='hit')text(e.text,e.x,e.y-35-(.25-e.life)*80,17,'#ffe6bb',800);if(e.type==='burst'){circle(e.x,e.y,e.radius,'#c3a9ff20',palette[e.team]);circle(e.x,e.y,e.radius*(1-e.life/.7),null,'#dcbdff');}if(e.type==='dash')line(e.x,e.y,e.tx,e.ty,palette[e.team],8);ctx.restore();}
+ for(const e of state.effects){ctx.save();ctx.globalAlpha=Math.min(1,e.life*3);if(e.type==='hit')text(e.text,e.x,e.y-35-(.25-e.life)*80,17,'#ffe6bb',800);if(e.type==='burst'){circle(e.x,e.y,e.radius,'#c3a9ff20',palette[e.team]);circle(e.x,e.y,e.radius*(1-e.life/.7),null,'#dcbdff');}if(e.type==='heal'){circle(e.x,e.y,50,'#9cffbb22','#9cffbb');text('+',e.x,e.y-30,25,'#9cffbb');}if(e.type==='dash')line(e.x,e.y,e.tx,e.ty,palette[e.team],8);ctx.restore();}
  if(marker&&now-marker.time<700){const t=(now-marker.time)/700;ctx.save();ctx.globalAlpha=1-t;circle(marker.x,Math.max(220,Math.min(540,marker.y)),10+t*18,null,'#b9fff4');ctx.restore();}
  if(now-lastState>4000){connected=false;text('연결이 지연되고 있어요. 잠시 기다려 주세요.',800,680,17,'#ffc89d');}
 }
