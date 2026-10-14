@@ -31,7 +31,7 @@ function send(type,key,targetId){
  if(!session||!connected||state?.winner!==null)return;
  const data={id:session.id,type,key,targetId,...mouse,seq:++sequence};
  prediction.input(data,performance.now());
- inputQueue=inputQueue.catch(()=>{}).then(()=>post('/api/input',data)).catch(()=>{$('#connection').textContent='명령 전송 실패 · 연결을 확인해 주세요';});
+ inputQueue=inputQueue.catch(()=>{}).then(async()=>{const start=performance.now();const result=await post('/api/input',data);prediction.setLatency(performance.now()-start);return result;}).catch(()=>{$('#connection').textContent='명령 전송 실패 · 연결을 확인해 주세요';});
 }
 function pointer(e){
  const r=canvas.getBoundingClientRect(),scale=Math.min(r.width/1600,r.height/760);
@@ -47,7 +47,7 @@ canvas.addEventListener('pointermove',pointer);
 canvas.addEventListener('pointerdown',e=>{
  e.preventDefault();if(!pointer(e))return;
  if(e.button===2){attackMode=false;const enemy=enemyAtMouse();selectedId=enemy?.id||null;send(enemy?'attack':'move',null,enemy?.id);}
- else if(e.button===0&&attackMode){attackMode=false;selectedId=null;send('attackMove');}
+ else if(e.button===0&&attackMode){attackMode=false;send('attackMove');}
  else if(e.button===0){selectedId=enemyAtMouse()?.id||null;return;}else return;
  canvas.classList.remove('attack-mode');marker={...mouse,time:performance.now()};
 });canvas.oncontextmenu=e=>e.preventDefault();
@@ -62,14 +62,14 @@ for(const name of ['help','settings'])$('#'+name+'-toggle').onclick=()=>{const p
 window.addEventListener('pagehide',()=>{if(session)navigator.sendBeacon('/api/leave',new Blob([JSON.stringify({id:session.id})],{type:'application/json'}));});
 function updateHud(){
  const me=state.players.find(p=>p.id===session?.id);if(!me)return;
- $('#my-name').textContent=me.name;$('#my-team').textContent=me.team?'레드 팀 · 오른쪽 기지':'블루 팀 · 왼쪽 기지';$('#my-icon').className=`portrait ${me.kind}`;$('#my-icon').textContent=icons[me.kind];
+ selectedId=me.preferredTarget||me.attackTarget||selectedId;$('#my-name').textContent=me.name;$('#my-team').textContent=me.team?'레드 팀 · 오른쪽 기지':'블루 팀 · 왼쪽 기지';$('#my-icon').className=`portrait ${me.kind}`;$('#my-icon').textContent=icons[me.kind];
  $('#health-bar').style.width=`${100*me.hp/me.maxHp}%`;$('#health-label').textContent=`${Math.ceil(me.hp)} / ${me.maxHp} HP${me.shield>0?' + 보호막 '+Math.ceil(me.shield):''}`;
  for(const key of ['q','w','e','r','d','f']){const el=$(`#skill-${key}`);el.classList.toggle('cooldown',me.cd[key]>0);el.querySelector('b').textContent=Math.ceil(me.cd[key]);}
  $('#clock').textContent=`${String(Math.floor(state.time/60)).padStart(2,'0')}:${String(Math.floor(state.time%60)).padStart(2,'0')}`;$('#wave').textContent=`WAVE ${state.wave}`;
  $('#score-blue').textContent=state.players.filter(p=>p.team===0).reduce((n,p)=>n+p.kills,0);$('#score-red').textContent=state.players.filter(p=>p.team===1).reduce((n,p)=>n+p.kills,0);
  $('#connection').textContent=state.players.some(p=>p.bot)?'봇 연습 대전 · 친구 입장 가능':'2명 연결됨 · 온라인 대전';
  $('#skill-r').classList.toggle('casting',!!me.casting);
- $('#notice').textContent=attackMode?'공격 이동할 위치를 좌클릭하세요':me.casting?'궁극기 시전 중…':me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
+ $('#notice').textContent=attackMode?'우선 공격할 적 근처를 좌클릭하세요':me.casting?'궁극기 시전 중…':me.hp<=0?`${Math.ceil(me.dead)}초 후 부활합니다`:state.structures.some(s=>s.type==='tower'&&s.team!==me.team&&s.hp>0)?'미니언 뒤에서 상대 포탑을 공략하세요':'상대 포탑 파괴! 이제 코어를 공격하세요';
  if(state.winner!==null){$('#result').hidden=false;$('#result-title').textContent=state.winner===me.team?'VICTORY':'DEFEAT';$('#result-copy').textContent=state.winner===me.team?'상대 코어를 파괴했습니다. 멋진 한 판이었어요!':'우리 코어가 파괴되었습니다. 다시 도전해 보세요.';}
 }
 function circle(x,y,r,fill,stroke){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.stroke();}}

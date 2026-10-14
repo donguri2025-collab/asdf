@@ -17,3 +17,15 @@ test('prediction respects casting and targeted attack range',()=>{
  const p=new Prediction(),h=hero();p.receive({...h,casting:{remaining:.5}},100);p.input({type:'move',x:700,y:380,seq:1},100);p.step(.05,state,150);assert.equal(p.local.x,170);
  p.reset();p.receive(h,200);p.input({type:'attack',targetId:'enemy',x:300,y:380,seq:1},200);p.step(.05,{...state,players:[{id:'enemy',team:1,x:300,y:380,hp:100}]},250);assert.equal(p.local.x,170);
 });
+
+test('delayed authoritative snapshots cannot drag walking backwards or stop prediction during auto-attacks',()=>{
+ const p=new Prediction(),h=hero();p.receive(h,0);p.input({type:'move',x:700,y:380,seq:1},0);
+ let previous=p.local.x;
+ for(let i=1;i<=40;i++){
+  const now=i*16;
+  if(i%4===0)p.receive({...h,x:170+215*Math.max(0,now-180)/1000,order:'move',target:{x:700,y:380},lastSeq:1,windup:{remaining:.2}},now);
+  p.step(.016,state,now);assert.ok(p.local.x>=previous);previous=p.local.x;
+ }
+ assert.ok(p.local.x>300);
+ const target={...p.local.target};p.input({type:'attackMove',x:400,y:220,seq:2},650);assert.deepEqual(p.local.target,target);
+});

@@ -9,7 +9,7 @@ const dist = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
 const clamp = (n,a,b) => Math.max(a,Math.min(b,n));
 function player(team, kind='ranger', bot=false) {
  const c=heroes[kind] || heroes.ranger;
- return {id:randomUUID(),type:'hero',team,kind:heroes[kind]?kind:'ranger',name:bot?'연습 봇':c.name,bot,x:team?1430:170,y:380,hp:c.hp,maxHp:c.hp,range:c.range,damage:c.damage,speed:c.speed,target:null,order:'idle',attackTarget:null,windup:null,casting:null,shield:0,shieldTime:0,lastSeq:0,attack:0,cd:{q:0,w:0,e:0,r:0,d:0,f:0},dead:0,kills:0,deaths:0};
+ return {id:randomUUID(),type:'hero',team,kind:heroes[kind]?kind:'ranger',name:bot?'연습 봇':c.name,bot,x:team?1430:170,y:380,hp:c.hp,maxHp:c.hp,range:c.range,damage:c.damage,speed:c.speed,target:null,order:'idle',attackTarget:null,preferredTarget:null,windup:null,casting:null,shield:0,shieldTime:0,lastSeq:0,attack:0,cd:{q:0,w:0,e:0,r:0,d:0,f:0},dead:0,kills:0,deaths:0};
 }
 export function createRoom(code) {
  return {code,time:0,wave:0,nextWave:2,players:[],minions:[],projectiles:[],effects:[],structures:[0,1].flatMap(team=>[
@@ -39,16 +39,23 @@ function hit(r,source,target,damage) {
   if(target.type==='core')r.winner=source.team;
  }
 }
-function move(u,target,dt){const d=dist(u,target);if(d>4){const s=Math.min(d,u.speed*dt);u.x=clamp(u.x+(target.x-u.x)/d*s,65,W-65);u.y=clamp(u.y+(target.y-u.y)/d*s,220,540);}}
+function move(u,target,dt){const d=dist(u,target);if(d<=4){u.x=target.x;u.y=target.y;}if(d>4){const s=Math.min(d,u.speed*dt);u.x=clamp(u.x+(target.x-u.x)/d*s,65,W-65);u.y=clamp(u.y+(target.y-u.y)/d*s,220,540);}}
 function shot(r,p,target,damage,speed=680){r.projectiles.push({id:randomUUID(),x:p.x,y:p.y,team:p.team,owner:p.id,target:target.id,damage,speed,life:2,type:'attack'});}
 export function command(r,id,input){
  const p=r.players.find(p=>p.id===id&&!p.bot); if(!p||p.hp<=0||r.winner!==null)return false;
  if(!Number.isFinite(input.x)||!Number.isFinite(input.y))return false;
  const aim={x:clamp(input.x,0,W),y:clamp(input.y,0,H)};
  if(Number.isSafeInteger(input.seq)){if(input.seq<=p.lastSeq)return false;p.lastSeq=input.seq;}
- if(['move','attackMove','attack'].includes(input.type)){
+ if(input.type==='attackMove'){
+  const candidates=units(r).filter(u=>u.team!==p.team&&attackable(r,u)&&dist(p,u)<=p.range);
+  const chosen=candidates.sort((a,b)=>dist(a,aim)-dist(b,aim))[0];
+  if(!chosen)return false;
+  p.preferredTarget=chosen.id;if(p.order==='attack')p.attackTarget=chosen.id;
+  p.windup=null;return true;
+ }
+ if(['move','attack'].includes(input.type)){
   if(input.type==='attack'&&!units(r).some(u=>u.id===input.targetId&&u.team!==p.team&&attackable(r,u)))return false;
-  p.order=input.type;p.attackTarget=input.type==='attack'?input.targetId:null;
+  p.preferredTarget=null;p.order=input.type;p.attackTarget=input.type==='attack'?input.targetId:null;
   p.target={x:clamp(aim.x,65,W-65),y:clamp(aim.y,220,540)};p.windup=null;return true;
  }
  if(input.type!=='skill'||!['q','w','e','r','d','f'].includes(input.key)||p.cd[input.key]>0||p.casting)return false;
@@ -96,7 +103,8 @@ export function tick(r,dt){
     if(dist(p,enemy)<250&&p.cd.e===0)cast(r,p,'e',p);
    }
   }
-  let enemy=p.order==='attack'?enemies.find(u=>u.id===p.attackTarget):p.order==='attackMove'?enemies.find(u=>dist(p,u)<=p.range):null;
+  const inRange=enemies.filter(u=>dist(p,u)<=p.range);
+  let enemy=p.order==='attack'?enemies.find(u=>u.id===p.attackTarget):inRange.find(u=>u.id===p.preferredTarget)||inRange.find(u=>u.id===p.windup?.id)||inRange[0];
   if(p.order==='attack'&&!enemy){p.order='idle';p.attackTarget=null;p.target=null;}
   if(p.windup){
    p.windup.remaining-=dt;
@@ -106,9 +114,10 @@ export function tick(r,dt){
     if(p.kind==='knight'){hit(r,p,enemy,p.damage);r.effects.push({type:'dash',x:p.x,y:p.y,tx:enemy.x,ty:enemy.y,team:p.team,life:.15});}
     else shot(r,p,enemy,p.damage);
    }
+   if(p.order==='move'&&p.target)move(p,p.target,dt);
    continue;
   }
-  if(enemy&&dist(p,enemy)<=p.range){p.attackTarget=enemy.id;if(p.attack===0)p.windup={id:enemy.id,remaining:.22};continue;}
+  if(enemy&&dist(p,enemy)<=p.range){p.attackTarget=enemy.id;if(p.attack===0)p.windup={id:enemy.id,remaining:.22};if(p.order==='move'&&p.target)move(p,p.target,dt);continue;}
   if(p.order==='attack'&&enemy)move(p,enemy,dt);
   else if(p.target){move(p,p.target,dt);if(dist(p,p.target)<5){p.target=null;if(p.order==='move')p.order='idle';}}
  }

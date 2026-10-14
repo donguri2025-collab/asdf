@@ -28,15 +28,21 @@ test('the core is protected by its tower, and destroying it ends the match',()=>
  const time=r.time;tick(r,1);assert.equal(r.time,time);
 });
 const duel=()=>{const r=createRoom('123456'),a=addPlayer(r,'ranger'),b=addPlayer(r,'knight');r.nextWave=100;a.x=700;b.x=900;return {r,a,b};};
-test('ordinary movement does not auto-attack; right-click attacks after a windup',()=>{
- const {r,a,b}=duel();command(r,a.id,{type:'move',x:750,y:380});advance(r,.5);assert.equal(b.hp,b.maxHp);assert.equal(r.projectiles.length,0);
- command(r,a.id,{type:'attack',targetId:b.id,x:b.x,y:b.y});const x=a.x;advance(r,.1);assert.ok(a.windup);assert.equal(a.x,x);assert.equal(b.hp,b.maxHp);
- advance(r,.7);assert.ok(b.hp<b.maxHp);
+test('idle and moving heroes automatically attack without stopping walking',()=>{
+ const {r,a,b}=duel();advance(r,.8);assert.ok(b.hp<b.maxHp);
+ command(r,a.id,{type:'move',x:1000,y:380});const start=a.x;advance(r,.5);assert.ok(Math.abs(a.x-start-a.speed*.5)<.01);
 });
-test('moving cancels attack windup and attack move acquires an enemy',()=>{
- const {r,a,b}=duel();command(r,a.id,{type:'attack',targetId:b.id,x:b.x,y:b.y});advance(r,.1);
- command(r,a.id,{type:'move',x:500,y:380});advance(r,.5);assert.equal(b.hp,b.maxHp);assert.ok(a.x<700);
- command(r,a.id,{type:'attackMove',x:1000,y:380});advance(r,1.5);assert.ok(b.hp<b.maxHp);
+test('A-click changes priority only and preserves the current walking destination',()=>{
+ const {r,a,b}=duel();r.minions.push({id:'extra',type:'minion',team:1,x:800,y:420,hp:999,maxHp:999,speed:0,damage:0,range:0,attack:0});
+ command(r,a.id,{type:'move',x:600,y:300});const target={...a.target};
+ assert.equal(command(r,a.id,{type:'attackMove',x:b.x,y:b.y}),true);assert.equal(a.preferredTarget,b.id);assert.deepEqual(a.target,target);assert.equal(a.order,'move');
+ advance(r,.1);assert.equal(a.windup.id,b.id);
+ command(r,a.id,{type:'attackMove',x:800,y:420});assert.equal(a.preferredTarget,'extra');assert.deepEqual(a.target,target);
+});
+test('A-click with no enemy does not move; selected target death falls back to automatic targeting',()=>{
+ const {r,a,b}=duel();b.x=1300;assert.equal(command(r,a.id,{type:'attackMove',x:1000,y:380}),false);assert.equal(a.target,null);assert.equal(a.order,'idle');
+ b.x=900;command(r,a.id,{type:'attackMove',x:900,y:380});b.hp=0;
+ r.minions.push({id:'replacement',type:'minion',team:1,x:800,y:380,hp:999,maxHp:999,speed:0,damage:0,range:0,attack:0});advance(r,.1);assert.equal(a.windup.id,'replacement');
 });
 test('targeted attack chases out-of-range enemy and stops in range',()=>{
  const {r,a,b}=duel();b.x=1100;command(r,a.id,{type:'attack',targetId:b.id,x:b.x,y:b.y});advance(r,1);assert.ok(a.x>700);assert.ok(a.x<860);assert.equal(a.order,'attack');
