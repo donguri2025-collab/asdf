@@ -43,3 +43,19 @@ test('all champions retain D heal and F flash and buffs clear on death',()=>{
  for(const kind of ['ashe','lux','garen']){const {r,a,b}=duel(kind,'lux');a.hp=100;skill(r,a,'d');assert.equal(a.hp,100+a.maxHp*.3);const x=a.x;skill(r,a,'f',1200);assert.equal(a.x,x+180);
  a.hp=1;a.spin=2;a.rapid=2;b.x=a.x+150;skill(r,b,'e',a.x);advance(r,1.2);assert.equal(a.hp,0);assert.equal(a.spin,0);assert.equal(a.rapid,0);}
 });
+test('tower ignores Lux Q/E/R and Garen spin; skill shots pass through to enemies behind it',()=>{
+ for(const key of ['q','e','r']){
+  const {r,a,b}=duel('lux');a.x=1050;b.x=1270;a.attack=999;b.attack=999;
+  const tower=r.structures.find(s=>s.id==='tower1');skill(r,a,key,1190);advance(r,1.3);
+  assert.equal(tower.hp,800,`Lux ${key} must not damage tower`);assert.ok(b.hp<b.maxHp,`Lux ${key} still hits enemy`);
+ }
+ const {r,a}=duel('garen');a.x=1100;a.attack=999;skill(r,a,'e');advance(r,.6);assert.equal(r.structures.find(s=>s.id==='tower1').hp,800);
+});
+test('basic attacks still damage towers, double after three minutes; Garen Q bonus is excluded',()=>{
+ for(const time of [179,180]){
+  const {r,a}=duel('ashe');r.time=time;const tower=r.structures.find(s=>s.id==='tower1');
+  r.projectiles.push({id:'basic',type:'attack',team:0,owner:a.id,x:tower.x,y:tower.y,target:tower.id,damage:34,speed:680,life:1});
+  tick(r,1/30);assert.equal(tower.hp,800-34*(time>=180?2:1));
+ }
+ const {r,a}=duel('garen');a.x=1100;skill(r,a,'q');command(r,a.id,{type:'attack',targetId:'tower1',x:1190,y:380});advance(r,.3);assert.equal(r.structures.find(s=>s.id==='tower1').hp,800-49);
+});

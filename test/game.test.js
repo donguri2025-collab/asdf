@@ -69,9 +69,9 @@ test('structures start at reduced health; damage doubles exactly at three minute
  assert.equal(tower.hp,800);assert.equal(tower.maxHp,800);assert.equal(core.hp,900);assert.equal(core.maxHp,900);
  a.x=1000;b.x=1190;
  for(const time of [179.999,180]){
-  r.time=time;a.cd.w=0;const thp=tower.hp,bhp=b.hp;
+  r.time=time;a.cd.w=0;const bhp=b.hp;
   command(r,a.id,{type:'skill',key:'w',x:1190,y:380});
-  assert.equal(thp-tower.hp,time<180?110:220);assert.equal(bhp-b.hp,110);
+  assert.equal(tower.hp,800);assert.equal(bhp-b.hp,110);
  }
  a.x=1400;a.cd.w=0;command(r,a.id,{type:'skill',key:'w',x:1490,y:380});assert.equal(core.hp,900);
  tower.hp=0;a.cd.w=0;command(r,a.id,{type:'skill',key:'w',x:1490,y:380});assert.equal(core.hp,680);

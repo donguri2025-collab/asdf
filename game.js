@@ -33,7 +33,8 @@ export function removePlayer(room,id) {
  p.bot=true;p.target=null;
 }
 function units(r) {return [...r.players,...r.minions,...r.structures].filter(u=>u.hp>0);}
-function hit(r,source,target,damage) {
+function hit(r,source,target,damage,kind='skill') {
+ if(target.type==='tower'&&kind==='skill')return;
  if(target.type==='core' && r.structures.some(s=>s.team===target.team&&s.type==='tower'&&s.hp>0))return;
  if(r.time>=180&&(target.type==='tower'||target.type==='core'))damage*=2;
  if(target.guard>0)damage*=.7;
@@ -138,7 +139,7 @@ export function tick(r,dt){
    if(!enemy||enemy.id!==p.windup.id||dist(p,enemy)>p.range+25)p.windup=null;
    else if(p.windup.remaining<=0){
     p.windup=null;p.attack=p.rapid>0?.18:.5;
-    if(p.kind==='knight'||p.kind==='garen'){hit(r,p,enemy,p.damage+(p.empowered>0?75:0));if(p.empowered>0){if(enemy.type==='hero')enemy.silence=1.2;p.empowered=0;}r.effects.push({type:'dash',x:p.x,y:p.y,tx:enemy.x,ty:enemy.y,team:p.team,life:.15});}
+    if(p.kind==='knight'||p.kind==='garen'){hit(r,p,enemy,p.damage+(p.empowered>0&&enemy.type!=='tower'?75:0),'attack');if(p.empowered>0){if(enemy.type==='hero')enemy.silence=1.2;p.empowered=0;}r.effects.push({type:'dash',x:p.x,y:p.y,tx:enemy.x,ty:enemy.y,team:p.team,life:.15});}
     else shot(r,p,enemy,p.damage);
    }
    if(p.order==='move'&&p.target)move(p,p.target,dt);
@@ -162,10 +163,10 @@ export function tick(r,dt){
   b.life-=dt;const owner=[...r.players,...r.minions,...r.structures].find(u=>u.id===b.owner)||{id:b.owner,team:b.team};
   if(b.type==='attack'){
    const t=all.find(u=>u.id===b.target&&u.hp>0);if(!t){b.life=0;continue;}
-   const d=dist(b,t);if(d<b.speed*dt+8){hit(r,owner,t,b.damage);applyStatus(t,b);b.life=0;}else{b.x+=(t.x-b.x)/d*b.speed*dt;b.y+=(t.y-b.y)/d*b.speed*dt;}
+   const d=dist(b,t);if(d<b.speed*dt+8){hit(r,owner,t,b.damage,'attack');applyStatus(t,b);b.life=0;}else{b.x+=(t.x-b.x)/d*b.speed*dt;b.y+=(t.y-b.y)/d*b.speed*dt;}
   }else{
    const previous={x:b.x,y:b.y};b.x+=b.vx*dt;b.y+=b.vy*dt;
-   const candidates=all.filter(u=>u.team!==b.team&&u.hp>0&&(!b.heroesOnly||u.type==='hero')&&!(b.hitIds||[]).includes(u.id)&&segmentDistance(u,previous,b)<(u.type==='minion'?14:u.type==='hero'?23:37)+b.radius).sort((a,c)=>dist(a,previous)-dist(c,previous));
+   const candidates=all.filter(u=>u.type!=='tower'&&u.team!==b.team&&u.hp>0&&(!b.heroesOnly||u.type==='hero')&&!(b.hitIds||[]).includes(u.id)&&segmentDistance(u,previous,b)<(u.type==='minion'?14:u.type==='hero'?23:37)+b.radius).sort((a,c)=>dist(a,previous)-dist(c,previous));
    for(const t of candidates){
     b.hitIds??=[];b.hitIds.push(t.id);
     if(!b.groupHits?.includes(t.id)){hit(r,owner,t,b.damage);applyStatus(t,b);b.groupHits?.push(t.id);}
