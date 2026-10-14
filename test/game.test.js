@@ -63,3 +63,22 @@ test('late input sequence cannot override a newer movement command',()=>{
  const {r,a}=duel();assert.equal(command(r,a.id,{type:'move',seq:2,x:500,y:380}),true);assert.equal(command(r,a.id,{type:'move',seq:1,x:1000,y:380}),false);assert.equal(a.target.x,500);
  assert.equal(command(r,a.id,{type:'stop',x:0,y:0}),false);
 });
+test('structures start at reduced health; damage doubles exactly at three minutes without bypassing core protection',()=>{
+ const r=createRoom('siege'),a=addPlayer(r,'mage'),b=addPlayer(r,'knight');
+ const tower=r.structures.find(u=>u.id==='tower1'),core=r.structures.find(u=>u.id==='core1');
+ assert.equal(tower.hp,800);assert.equal(tower.maxHp,800);assert.equal(core.hp,900);assert.equal(core.maxHp,900);
+ a.x=1000;b.x=1190;
+ for(const time of [179.999,180]){
+  r.time=time;a.cd.w=0;const thp=tower.hp,bhp=b.hp;
+  command(r,a.id,{type:'skill',key:'w',x:1190,y:380});
+  assert.equal(thp-tower.hp,time<180?110:220);assert.equal(bhp-b.hp,110);
+ }
+ a.x=1400;a.cd.w=0;command(r,a.id,{type:'skill',key:'w',x:1490,y:380});assert.equal(core.hp,900);
+ tower.hp=0;a.cd.w=0;command(r,a.id,{type:'skill',key:'w',x:1490,y:380});assert.equal(core.hp,680);
+});
+test('minion projectiles also receive the three-minute structure damage multiplier',()=>{
+ const r=createRoom('siege');r.time=180;r.nextWave=100;
+ const tower=r.structures.find(u=>u.id==='tower1');
+ r.projectiles.push({id:'shot',x:tower.x,y:tower.y,team:0,owner:'minion',target:tower.id,damage:15,speed:680,life:2,type:'attack'});
+ tick(r,1/30);assert.equal(tower.hp,770);
+});

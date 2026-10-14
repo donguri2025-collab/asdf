@@ -13,8 +13,8 @@ function player(team, kind='ranger', bot=false) {
 }
 export function createRoom(code) {
  return {code,time:0,wave:0,nextWave:2,players:[],minions:[],projectiles:[],effects:[],structures:[0,1].flatMap(team=>[
- {id:`tower${team}`,type:'tower',team,x:team?1190:410,y:380,hp:1500,maxHp:1500,range:290,attack:0},
- {id:`core${team}`,type:'core',team,x:team?1490:110,y:380,hp:1800,maxHp:1800,range:0,attack:0}]),winner:null};
+ {id:`tower${team}`,type:'tower',team,x:team?1190:410,y:380,hp:800,maxHp:800,range:290,attack:0},
+ {id:`core${team}`,type:'core',team,x:team?1490:110,y:380,hp:900,maxHp:900,range:0,attack:0}]),winner:null};
 }
 export function addPlayer(room,kind) {
  if(room.players.filter(p=>!p.bot).length>=2) return null;
@@ -31,6 +31,7 @@ export function removePlayer(room,id) {
 function units(r) {return [...r.players,...r.minions,...r.structures].filter(u=>u.hp>0);}
 function hit(r,source,target,damage) {
  if(target.type==='core' && r.structures.some(s=>s.team===target.team&&s.type==='tower'&&s.hp>0))return;
+ if(r.time>=180&&(target.type==='tower'||target.type==='core'))damage*=2;
  if(target.shield>0){const absorbed=Math.min(target.shield,damage);target.shield-=absorbed;damage-=absorbed;}
  target.hp=Math.max(0,target.hp-damage);
  r.effects.push({type:'hit',x:target.x,y:target.y,life:.25,team:source.team,text:Math.round(damage)});
