@@ -14,7 +14,7 @@ export function championCast(r,p,key,aim,h){
  if(p.kind==='lux'){
   if(key==='q'){p.cd.q=6;projectile(r,p,direction,{damage:110,radius:16,life:1.1,speed:600,visual:'light',root:1.4,pierce:2});}
   if(key==='w'){p.cd.w=10;p.shield=180;p.shieldTime=3;r.effects.push({type:'shield',x:p.x,y:p.y,team:p.team,life:.6});}
-  if(key==='e'){p.cd.e=8;r.zones.push({...center(),owner:p.id,team:p.team,radius:145,life:1.1,damage:130});}
+  if(key==='e'){p.cd.e=8;r.zones.push({...center(),owner:p.id,team:p.team,radius:145,life:5,damage:130});}
   if(key==='r'){p.cd.r=30;p.windup=null;p.casting={type:'laser',x:p.x,y:p.y,tx:p.x+Math.cos(direction)*1100,ty:p.y+Math.sin(direction)*1100,remaining:.65};}
  }
  if(p.kind==='garen'){

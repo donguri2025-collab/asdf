@@ -71,6 +71,9 @@ function updateHud(){
  const kit=kits[me.kind];if(kit)for(const key of ['q','w','e','r']){const el=$('#skill-'+key);el.querySelector('span').textContent=kit[key][1];el.querySelector('small').textContent=kit[key][0];el.title=kit[key][0]+' · '+kit[key][2];}
  $('#health-bar').style.width=`${100*me.hp/me.maxHp}%`;$('#health-label').textContent=`${Math.ceil(me.hp)} / ${me.maxHp} HP${me.shield>0?' + 보호막 '+Math.ceil(me.shield):''}`;
  for(const key of ['q','w','e','r','d','f']){const el=$(`#skill-${key}`);el.classList.toggle('cooldown',me.cd[key]>0);el.querySelector('b').textContent=Math.ceil(me.cd[key]);}
+ const recastE=me.kind==='lux'&&(state.zones||[]).some(z=>z.owner===me.id);
+ $('#skill-e').classList.toggle('recast',recastE);
+ if(recastE){$('#skill-e').classList.remove('cooldown');$('#skill-e small').textContent='E 다시: 폭발';$('#skill-e').title='E를 다시 누르면 즉시 폭발합니다';}
  $('#clock').textContent=`${String(Math.floor(state.time/60)).padStart(2,'0')}:${String(Math.floor(state.time%60)).padStart(2,'0')}`;$('#wave').textContent=`WAVE ${state.wave}`;
  $('#score-blue').textContent=state.players.filter(p=>p.team===0).reduce((n,p)=>n+p.kills,0);$('#score-red').textContent=state.players.filter(p=>p.team===1).reduce((n,p)=>n+p.kills,0);
  $('#connection').textContent=state.players.some(p=>p.bot)?'봇 연습 대전 · 친구 입장 가능':'2명 연결됨 · 온라인 대전';

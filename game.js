@@ -66,6 +66,7 @@ export function command(r,id,input){
   p.target={x:clamp(aim.x,65,W-65),y:clamp(aim.y,220,540)};p.windup=null;return true;
  }
  if(p.stun>0||p.silence>0||input.key==='f'&&p.root>0)return false;
+ if(input.type==='skill'&&input.key==='e'&&p.kind==='lux'&&!p.casting){const zone=r.zones.find(z=>z.owner===p.id);if(zone){detonateZone(r,zone);return true;}}
  if(input.type!=='skill'||!['q','w','e','r','d','f'].includes(input.key)||p.cd[input.key]>0||p.casting)return false;
  return cast(r,p,input.key,aim)!==false;
 }
@@ -73,6 +74,13 @@ function attackable(r,u){return u.hp>0&&!(u.type==='core'&&r.structures.some(s=>
 function area(r,p,center,radius,damage){
  r.effects.push({type:'burst',x:center.x,y:center.y,radius,team:p.team,life:.6});
  for(const enemy of units(r).filter(u=>u.team!==p.team&&dist(u,center)<radius))hit(r,p,enemy,damage);
+}
+function detonateZone(r,zone){
+ const index=r.zones.indexOf(zone);if(index<0)return;
+ r.zones.splice(index,1);
+ const owner=r.players.find(p=>p.id===zone.owner)||{team:zone.team};
+ area(r,owner,zone,zone.radius,zone.damage);
+ for(const u of units(r))if(u.team!==zone.team&&dist(u,zone)<zone.radius)applyStatus(u,{slow:2});
 }
 function projectile(r,p,angle,options){const speed=options.speed;r.projectiles.push({id:randomUUID(),x:p.x,y:p.y,team:p.team,owner:p.id,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,type:'skill',hitIds:[],...options});}
 function applyStatus(target,b){if(!['hero','minion'].includes(target.type))return;for(const key of ['root','stun','slow'])if(b[key])target[key]=Math.max(target[key]||0,b[key]);}
@@ -102,8 +110,7 @@ export function tick(r,dt){
   for(const key of ['root','stun','slow','silence','rapid','scout','haste','guard','spin','empowered'])u[key]=Math.max(0,(u[key]||0)-dt);
   u.speed=(u.baseSpeed||heroes[u.kind]?.speed||70)*(u.haste>0?1.35:1)*(u.slow>0?.65:1);
  }
- for(const zone of r.zones){zone.life-=dt;if(zone.life<=0){const owner=r.players.find(p=>p.id===zone.owner)||{team:zone.team};area(r,owner,zone,zone.radius,zone.damage);for(const u of units(r))if(u.team!==zone.team&&dist(u,zone)<zone.radius)applyStatus(u,{slow:2});}}
- r.zones=r.zones.filter(z=>z.life>0);
+ for(const zone of [...r.zones]){zone.life-=dt;if(zone.life<=0)detonateZone(r,zone);}
  for(const p of r.players){
   for(const k of Object.keys(p.cd))p.cd[k]=Math.max(0,p.cd[k]-dt);
   if(p.hp<=0){p.dead-=dt;if(p.dead<=0){p.hp=p.maxHp;p.x=p.team?1430:170;p.y=380;}continue;}

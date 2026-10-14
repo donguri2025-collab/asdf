@@ -26,7 +26,7 @@ test('Lux Q pierces two enemies and roots without allowing flash',()=>{
 });
 test('Lux W shields, E detonates after a delay and R is a directional piercing laser',()=>{
  const {r,a,b}=duel('lux');skill(r,a,'w');assert.equal(a.shield,180);
- skill(r,a,'e');advance(r,.5);assert.equal(b.hp,b.maxHp);advance(r,.65);assert.equal(b.hp,b.maxHp-130);assert.ok(b.slow>0);
+ skill(r,a,'e');advance(r,.5);assert.equal(b.hp,b.maxHp);skill(r,a,'e');assert.equal(b.hp,b.maxHp-130);assert.ok(b.slow>0);
  b.hp=b.maxHp;skill(r,a,'r',1400);advance(r,.3);assert.equal(b.hp,b.maxHp);advance(r,.4);assert.equal(b.hp,b.maxHp-280);assert.ok(r.effects.some(e=>e.type==='laser'));
 });
 test('Garen Q empowers melee and silences; W shields and reduces incoming damage',()=>{
@@ -41,12 +41,12 @@ test('Garen spins while moving and R requires a nearby champion and scales with 
 });
 test('all champions retain D heal and F flash and buffs clear on death',()=>{
  for(const kind of ['ashe','lux','garen']){const {r,a,b}=duel(kind,'lux');a.hp=100;skill(r,a,'d');assert.equal(a.hp,100+a.maxHp*.3);const x=a.x;skill(r,a,'f',1200);assert.equal(a.x,x+180);
- a.hp=1;a.spin=2;a.rapid=2;b.x=a.x+150;skill(r,b,'e',a.x);advance(r,1.2);assert.equal(a.hp,0);assert.equal(a.spin,0);assert.equal(a.rapid,0);}
+ a.hp=1;a.spin=2;a.rapid=2;b.x=a.x+150;skill(r,b,'e',a.x);skill(r,b,'e',a.x);advance(r,1.2);assert.equal(a.hp,0);assert.equal(a.spin,0);assert.equal(a.rapid,0);}
 });
 test('tower ignores Lux Q/E/R and Garen spin; skill shots pass through to enemies behind it',()=>{
  for(const key of ['q','e','r']){
   const {r,a,b}=duel('lux');a.x=1050;b.x=1270;a.attack=999;b.attack=999;
-  const tower=r.structures.find(s=>s.id==='tower1');skill(r,a,key,1190);advance(r,1.3);
+  const tower=r.structures.find(s=>s.id==='tower1');skill(r,a,key,1190);if(key==='e')skill(r,a,'e');advance(r,1.3);
   assert.equal(tower.hp,800,`Lux ${key} must not damage tower`);assert.ok(b.hp<b.maxHp,`Lux ${key} still hits enemy`);
  }
  const {r,a}=duel('garen');a.x=1100;a.attack=999;skill(r,a,'e');advance(r,.6);assert.equal(r.structures.find(s=>s.id==='tower1').hp,800);
@@ -58,4 +58,14 @@ test('basic attacks still damage towers, double after three minutes; Garen Q bon
   tick(r,1/30);assert.equal(tower.hp,800-34*(time>=180?2:1));
  }
  const {r,a}=duel('garen');a.x=1100;skill(r,a,'q');command(r,a.id,{type:'attack',targetId:'tower1',x:1190,y:380});advance(r,.3);assert.equal(r.structures.find(s=>s.id==='tower1').hp,800-49);
+});
+test('Lux E recasts during cooldown, detonates exactly once and preserves initial cooldown',()=>{
+ const {r,a,b}=duel('lux','lux');skill(r,a,'e');assert.equal(r.zones.length,1);assert.equal(a.cd.e,8);assert.equal(b.hp,b.maxHp);
+ advance(r,.2);const cd=a.cd.e;assert.equal(skill(r,a,'e',0,0),true);assert.equal(r.zones.length,0);assert.equal(b.hp,b.maxHp-130);assert.equal(a.cd.e,cd);
+ assert.equal(skill(r,a,'e'),false);advance(r,.2);assert.equal(b.hp,b.maxHp-130);
+});
+test('Lux E automatically detonates at five seconds and cannot detonate another player zone',()=>{
+ const {r,a,b}=duel('lux','lux');skill(r,a,'e');skill(r,b,'e',650);assert.equal(r.zones.length,2);
+ skill(r,a,'e');assert.equal(r.zones.length,1);assert.equal(r.zones[0].owner,b.id);
+ advance(r,4.9);assert.equal(r.zones.length,1);advance(r,.15);assert.equal(r.zones.length,0);assert.ok(a.hp<a.maxHp);
 });

@@ -4,3 +4,5 @@ body.in-match{overflow:hidden;background:#091a29}body.in-match>header{display:no
 
 #siege-status{position:absolute;top:142px;left:50%;transform:translateX(-50%);color:#ffe0a3;background:#3b281fe8;border:1px solid #bd8958;border-radius:20px;padding:6px 14px;font-size:11px;white-space:nowrap;pointer-events:none}@media(max-width:650px){#siege-status{top:160px;font-size:9px}}
 #kit-preview{margin-top:14px;line-height:1.9;font-size:10px;color:#a8c9da}.portrait.ashe{background-color:#17364f}.portrait.lux{background-color:#4b4128}.portrait.garen{background-color:#253c66}#game .skill small{font-size:7px;max-width:100%;overflow:hidden;text-overflow:ellipsis}#game .skill:hover{border-color:#fff0b2;box-shadow:0 0 14px #ffe2a044}.hero .portrait{width:60px;height:64px}
+
+#skill-e.recast{border-color:#fff1a5;box-shadow:0 0 18px #ffe79180;background:linear-gradient(#6d6134,#362e1a)}#skill-e.recast span{color:#fff3b6}
