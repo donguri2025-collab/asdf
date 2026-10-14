@@ -82,3 +82,9 @@ test('minion projectiles also receive the three-minute structure damage multipli
  r.projectiles.push({id:'shot',x:tower.x,y:tower.y,team:0,owner:'minion',target:tower.id,damage:15,speed:680,life:2,type:'attack'});
  tick(r,1/30);assert.equal(tower.hp,770);
 });
+test('neither base regenerates health; D heal and full-health respawn still work',()=>{
+ const r=createRoom('no-regen'),a=addPlayer(r,'ashe'),b=addPlayer(r,'lux');r.nextWave=100;
+ a.hp=100;b.hp=100;advance(r,3);assert.equal(a.hp,100);assert.equal(b.hp,100);
+ command(r,a.id,{type:'skill',key:'d',x:a.x,y:a.y});assert.equal(a.hp,100+a.maxHp*.3);
+ b.hp=0;b.dead=1;advance(r,1.1);assert.equal(b.hp,b.maxHp);
+});

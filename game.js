@@ -114,7 +114,6 @@ export function tick(r,dt){
  for(const p of r.players){
   for(const k of Object.keys(p.cd))p.cd[k]=Math.max(0,p.cd[k]-dt);
   if(p.hp<=0){p.dead-=dt;if(p.dead<=0){p.hp=p.maxHp;p.x=p.team?1430:170;p.y=380;}continue;}
-  if((p.team===0&&p.x<225)||(p.team===1&&p.x>1375))p.hp=Math.min(p.maxHp,p.hp+90*dt);
   p.attack=Math.max(0,p.attack-dt);p.shieldTime=Math.max(0,p.shieldTime-dt);if(!p.shieldTime)p.shield=0;
   if(p.stun>0){p.windup=null;p.casting=null;continue;}
   if(p.casting){p.casting.remaining-=dt;if(p.casting.remaining<=0){
